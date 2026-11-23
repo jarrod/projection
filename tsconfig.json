@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2022","module":"NodeNext","moduleResolution":"NodeNext","strict":true,"declaration":true,"lib":["ES2022","DOM","DOM.Iterable"],"types":["node"],"outDir":"dist","rootDir":"src","skipLibCheck":true},"include":["src"],"exclude":["src/client","src/assets.d.ts"]}

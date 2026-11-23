@@ -1,0 +1,81 @@
+{
+ "modelVisibleTools": [
+  {
+   "name": "add_note",
+   "description": "Create a note",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "title": {
+      "type": "string"
+     },
+     "body": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "title",
+     "body"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+   }
+  },
+  {
+   "name": "list_notes",
+   "description": "List all notes",
+   "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "$schema": "http://json-schema.org/draft-07/schema#"
+   }
+  },
+  {
+   "name": "pin_note",
+   "description": "Toggle pin on a note",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "number"
+     }
+    },
+    "required": [
+     "id"
+    ],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+   }
+  }
+ ],
+ "calls": [
+  {
+   "name": "add_note",
+   "content": [
+    {
+     "type": "text",
+     "text": "Created note #1: Hello"
+    }
+   ],
+   "structuredContent": null
+  },
+  {
+   "name": "pin_note",
+   "content": [
+    {
+     "type": "text",
+     "text": "#1 pinned=true"
+    }
+   ],
+   "structuredContent": null
+  },
+  {
+   "name": "list_notes",
+   "content": [
+    {
+     "type": "text",
+     "text": "#1 (pinned) Hello"
+    }
+   ],
+   "structuredContent": null
+  }
+ ]
+}

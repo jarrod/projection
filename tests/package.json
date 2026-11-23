@@ -1,0 +1,17 @@
+{
+  "name": "projection-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "unit": "node t1-unit.mjs",
+    "host": "node t2-mcp-host.mjs",
+    "web": "python3 t3-web.py"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^21.0.4",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/core": "^2.4.0",
+    "@modelcontextprotocol/ext-apps": "2.0.4",
+    "zod": "^4.6.7"
+  }
+}
