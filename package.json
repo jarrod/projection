@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node build.mjs",
     "example": "cd examples/notes-server && npm install && npm run build",
-    "test": "npm run build && npm run example && cd tests && npm install && npm run unit && npm run host",
+    "test": "npm run build && npm run example && cd tests && npm install && npm run snapshot && npm run unit && npm run host",
     "test:web": "cd tests && npm run web"
   },
   "keywords": [],

@@ -1,4 +1,4 @@
 import { start } from "./runtime.js";
 import { httpTransport } from "./http.js";
 const st = JSON.parse(document.getElementById("p-state")!.textContent!);
-start(httpTransport(st.base), st).catch((e) => console.error("[mcp-projection]", e));
+start(httpTransport(st.base), st);

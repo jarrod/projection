@@ -7,14 +7,20 @@ const tone = (t?: Tone) => (t && t !== "neutral" ? t : "");
 
 /** Action props shared by anything that can call a tool. */
 export type Action = {
-  /** MCP tool to call (must be listed in defineUi({ writes })). */
+  /** MCP tool to call: the same one the agent calls. */
   tool?: string;
   /** Extra arguments merged into the tool call. */
   args?: Record<string, unknown>;
+  /** Instead of a tool: merge these into the view params and render again (open a row, switch page, sort).
+   *  `true` on an Input/Select/Form sets its own fields (search boxes, filters). */
+  set?: Record<string, unknown> | true;
   /** Close the surrounding dialog/menu after success. */
   close?: boolean;
 };
-const act = (a: Action) => ({ "hx-tool": a.tool, "hx-vals": a.args, "p-close": a.close && !!a.tool });
+const act = (a: Action) => ({
+  "hx-tool": a.tool, "p-set": !a.tool && !!a.set,
+  "hx-vals": a.tool ? a.args : a.set === true ? undefined : a.set, "p-close": a.close && !!(a.tool || a.set),
+});
 
 // ---------- icons (inline, 1.5 stroke) ----------
 const P: Record<string, string> = {
@@ -57,7 +63,7 @@ export function Button(p: ButtonProps, ...c: Kids): Html {
   return html`<button${attrs({
     id: p.id,
     class: cx("btn", p.variant && p.variant !== "primary" && p.variant, p.size === "sm" && "sm", iconOnly && "icon"),
-    type: p.type ?? (p.tool || p.opens ? "button" : undefined),
+    type: p.type ?? (p.tool || p.set || p.opens ? "button" : undefined),
     disabled: p.disabled, "aria-label": iconOnly ? p.label : undefined, title: iconOnly ? p.label : undefined,
     popovertarget: p.opens, ...act(p),
   })}>${p.icon && Icon(p.icon)}${c}</button>`;
@@ -68,14 +74,14 @@ export const Form = (p: Action & { id?: string; keepValues?: boolean }, ...c: Ki
   html`<form${attrs({ id: p.id, class: "stack", "p-keep-values": p.keepValues, ...act(p) })}>${c}</form>`;
 
 type FieldProps = { name: string; label?: string; hint?: string; required?: boolean; placeholder?: string; disabled?: boolean } & Action & {
-  /** With `tool`: call it on every keystroke after this many ms (search boxes). */
+  /** With `tool` or `set`: act on every keystroke after this many ms (search boxes). */
   debounce?: number;
 };
 const field = (p: FieldProps, control: Html) =>
   p.label || p.hint ? html`<label class="field">${p.label && html`<span>${p.label}</span>`}${control}${p.hint && html`<small>${p.hint}</small>`}</label>` : control;
 const ctl = (p: FieldProps) => ({
   name: p.name, required: p.required, placeholder: p.placeholder, disabled: p.disabled,
-  ...act(p), "hx-trigger": p.tool && p.debounce != null ? "input" : undefined, "p-debounce": p.tool && p.debounce,
+  ...act(p), "hx-trigger": (p.tool || p.set) && p.debounce != null ? "input" : undefined, "p-debounce": (p.tool || p.set) && p.debounce,
 });
 
 export const Input = (p: FieldProps & { type?: string; value?: unknown; autofocus?: boolean }) =>
@@ -122,9 +128,9 @@ export const Skeleton = (p: { lines?: number; width?: string } = {}) =>
   html`<div class="stack" style="--gap:8px" aria-hidden="true">${Array.from({ length: p.lines ?? 3 }, (_, i) => html`<i class="skel" style="width:${i === (p.lines ?? 3) - 1 ? "60%" : p.width ?? "100%"}"></i>`)}</div>`;
 
 // ---------- client-side interactivity (native: radios + popover API) ----------
-/** Tabs. Selection lives in the browser (p-local) and survives live updates. Up to 6 tabs. */
+/** Tabs. Selection lives in the browser and survives live updates. Up to 6 tabs. */
 export const Tabs = (p: { id: string; tabs: { label: unknown; content: unknown }[]; selected?: number }) =>
-  html`<div class="tabs" p-local id="${p.id}">${p.tabs.map((t, i) =>
+  html`<div class="tabs" id="${p.id}">${p.tabs.map((t, i) =>
     html`<input type="radio" name="${p.id}" id="${p.id}-${i}"${attrs({ checked: i === (p.selected ?? 0) })}><label for="${p.id}-${i}">${t.label}</label>`)}${p.tabs.map((t) =>
     html`<div class="panel">${t.content}</div>`)}</div>`;
 

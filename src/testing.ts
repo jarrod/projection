@@ -15,21 +15,6 @@ async function connect(factory: Factory, name: string) {
   await c.connect(a);
   return c;
 }
-
-/** Replace <p-f id="..."> ... </p-f> (balanced) inside doc with next. */
-function splice(doc: string, id: string, next: string) {
-  const open = `<p-f id="${id.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}">`;
-  const start = doc.indexOf(open);
-  if (start < 0) return doc;
-  let depth = 0, i = start;
-  const re = /<p-f\b|<\/p-f>/g;
-  re.lastIndex = start;
-  for (let m; (m = re.exec(doc)); ) {
-    depth += m[0] === "</p-f>" ? -1 : 1;
-    if (!depth) { i = m.index + 6; break; }
-  }
-  return doc.slice(0, start) + next + doc.slice(i);
-}
 const textOf = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
 
 export async function testUi(factory: Factory) {
@@ -41,29 +26,37 @@ export async function testUi(factory: Factory) {
   /** What the model sees: tools not marked app-only. */
   const modelTools = tools.filter((t: any) => !(t._meta?.ui?.visibility ?? ["model"]).every((v: string) => v === "app"));
 
-  async function mount(root?: string) {
-    const r: any = (await host.callTool({ name: "p_mount", arguments: root ? { root } : {} })).structuredContent;
-    let doc: string = r.html, since: number = r.since, closed = false;
-    const pid: string = r.pid;
-    const apply = (ps: any[] = []) => { for (const p of ps) if (p.seq > since) { since = p.seq; doc = splice(doc, p.id, p.html); } };
-    (async () => {
-      while (!closed) {
-        const s: any = await host.callTool({ name: "p_sync", arguments: { _pid: pid, _since: since } }).catch(() => null);
-        if (s?.isError) break;
-        apply(s?.structuredContent?.patches);
-      }
-    })();
+  /** Open the UI like a host would, with optional view params. */
+  async function mount(params: Record<string, unknown> = {}) {
+    let doc = "", h: string | undefined, v: number | undefined, gen = 0, closed = false;
+    const once = async (g: number) => {
+      const s: any = await host.callTool({ name: "p_sync", arguments: { params, h, v } });
+      if (s.isError) throw new Error(s.content?.[0]?.text);
+      if (g !== gen || closed) return;
+      const r = s.structuredContent;
+      v = r.v;
+      if (r.html) { h = r.h; doc = r.html; }
+    };
+    /** Render now, then keep following changes (what the runtime does after an action). */
+    const refresh = async () => {
+      const g = ++gen;
+      v = undefined;
+      await once(g);
+      (async () => { while (g === gen && !closed) await once(g).catch(() => { closed = true; }); })();
+    };
+    await refresh();
     return {
-      pid,
       html: () => doc,
       text: () => textOf(doc),
-      /** Call a tool the way a click on hx-tool would. */
+      /** Call a tool the way a click on hx-tool would. Throws if the tool reports an error. */
       async click(tool: string, args: Record<string, unknown> = {}) {
-        const res: any = await host.callTool({ name: "p_call", arguments: { tool, args, _pid: pid, _since: since } });
+        const res: any = await host.callTool({ name: tool, arguments: args });
         if (res.isError) throw new Error(res.content?.[0]?.text);
-        apply(res.structuredContent.patches);
-        return res.structuredContent.result;
+        await refresh();
+        return res;
       },
+      /** Change view params the way a `set` control would. */
+      async set(p: Record<string, unknown>) { params = { ...params, ...p }; await refresh(); },
       /** Wait until the visible text matches. */
       async until(pred: (text: string, html: string) => boolean, ms = 2000) {
         const t0 = Date.now();

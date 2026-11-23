@@ -19,7 +19,7 @@ def http(path, method="GET", headers={}, data=None):
 
 try:
     ok(http("/ui/") == 401, "no session → 401 gate page")
-    ok(http("/ui/stream?pid=x") == 401 and http("/ui/tool/add_note", "POST", data=b"{}") == 401, "API without session → 401")
+    ok(http("/ui/sync", "POST", data=b"{}") == 401 and http("/ui/tool/add_note", "POST", data=b"{}") == 401, "API without session → 401")
 
     r = agent("open_notes_in_browser")
     url = r["elicitedUrl"]
@@ -46,7 +46,7 @@ try:
         t0 = time.time()
         agent("add_note", {"title": "Ship the UI layer", "body": "Fragments over MCP, no framework"})
         page.wait_for_selector("#notes-all-1", timeout=3000)
-        ok(True, f"agent add_note → browser updated over SSE in {int((time.time()-t0)*1000)} ms")
+        ok(True, f"agent add_note → browser updated in {int((time.time()-t0)*1000)} ms")
         agent("add_note", {"title": "Write AGENTS.md", "body": "Docs for coding agents"})
         agent("add_note", {"title": "Measure bundle sizes", "body": ""})
         page.wait_for_selector("#notes-all-3")

@@ -17,7 +17,6 @@ const gz = (await import("node:zlib")).gzipSync(res.text).length; ok(gz < 7000, 
 
 GlobalRegistrator.register({ settings: { disableCSSFileLoading: true } });
 document.head.innerHTML = res.text.match(/<head>([\s\S]*?)<\/head>/)[1];
-document.body.setAttribute("data-p-root", res.text.match(/data-p-root="([^"]+)"/)[1]);
 const fakeParent = { postMessage: (m) => queueMicrotask(() => hostSide.onmessage?.(m)) };
 Object.defineProperty(window, "parent", { value: fakeParent, configurable: true });
 const hostSide = { start: async () => {}, close: async () => {}, send: async (m) => queueMicrotask(() => window.dispatchEvent(new MessageEvent("message", { data: m, source: fakeParent }))) };
@@ -45,7 +44,23 @@ await until(() => document.body.textContent.includes("Second agent note"));
 const sameInput = document.querySelector("#new-note input[name=title]");
 ok(sameInput === input && input.value === "half-typed" && document.activeElement === input, "morph kept the same input node, its value and focus");
 
-// tab selection is client state (p-local) and survives updates
+// a field the user filled in and left is not wiped by an update either
+const body = document.querySelector("#new-note textarea[name=body]");
+body.focus();
+await agent.callTool({ name: "add_note", arguments: { title: "Third agent note", body: "" } });
+await until(() => document.body.textContent.includes("Third agent note"));
+ok(input.value === "half-typed", "morph kept a typed value in a field that no longer has focus");
+input.value = "";
+
+// view params: typing in the search box re-renders with { q } and the box keeps focus
+const q = document.querySelector("input[name=q]");
+q.focus(); q.value = "second"; q.dispatchEvent(new Event("input", { bubbles: true }));
+ok(await until(() => document.querySelectorAll("#notes-all tbody tr").length === 1), "search box → view params → filtered list");
+ok(document.activeElement === q && q.value === "second", "search box kept focus and text");
+q.value = ""; q.dispatchEvent(new Event("input", { bubbles: true }));
+ok(await until(() => document.querySelectorAll("#notes-all tbody tr").length === 3), "clearing the search restores the list");
+
+// tab selection is client state and survives updates
 document.querySelector("#view-1").checked = true;
 await agent.callTool({ name: "pin_note", arguments: { id: 1 } });
 ok(await until(() => document.querySelector("#notes-pinned tbody")?.textContent.includes("Live from agent")), "pinned tab list updated");
@@ -55,7 +70,7 @@ ok(document.querySelector("#view-1").checked, "selected tab survived the update"
 const btn = document.querySelector('#notes-all-2 button[hx-tool="pin_note"]');
 btn.click();
 ok(await until(() => document.querySelector("#notes-all-2")?.textContent.includes("Pinned")), "human click → pin_note → row updated");
-ok((await agent.callTool({ name: "list_notes", arguments: {} })).content[0].text.split("\n").every((l) => l.includes("(pinned)")), "agent sees both pins");
+ok((await agent.callTool({ name: "list_notes", arguments: {} })).content[0].text.split("\n").slice(0, 2).every((l) => l.includes("(pinned)")), "agent sees both pins");
 
 // form submit through the dialog
 const form = document.querySelector("#new-note form");

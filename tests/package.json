@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "snapshot": "node agent-snapshot.mjs ../examples/notes-server/dist/server.js open_notes_in_browser | diff - baseline.json && echo 'PASS agent-facing tools and results match the baseline'",
     "unit": "node t1-unit.mjs",
     "host": "node t2-mcp-host.mjs",
     "web": "python3 t3-web.py"

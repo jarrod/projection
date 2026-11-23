@@ -1,5 +1,5 @@
 // Tiny DOM morph: update `a` in place to match `b`, keyed by id.
-// Keeps focus, caret, scroll, open popovers and client-owned state (p-local, <details open>).
+// Keeps focus, caret, scroll, open popovers and anything the user has typed, ticked or selected.
 
 const same = (a: Node, b: Node) =>
   a.nodeType === b.nodeType && a.nodeName === b.nodeName && ((a as Element).id || "") === ((b as Element).id || "");
@@ -11,20 +11,21 @@ const mark = (n: Node | null) => { const e = n && (n.nodeType === 1 ? n as Eleme
 export function morph(a: Node, b: Node) {
   if (!same(a, b)) { a.parentNode?.replaceChild(b, a); mark(b); return; }
   if (a.nodeType !== 1) { if (a.nodeValue !== b.nodeValue) { a.nodeValue = b.nodeValue; mark(a); } return; }
-  const ea = a as Element, eb = b as Element;
+  const ea = a as any, eb = b as any;
   if (ea.hasAttribute("p-keep")) return;
-  const local = ea.closest("[p-local]");
+  // What the server last rendered for a form control. Its live value may differ because the user changed it.
+  const dv = ea.defaultValue, dc = ea.defaultChecked, ds = ea.defaultSelected;
 
   for (const { name } of [...ea.attributes]) {
     if (!eb.hasAttribute(name) && !(name === "open" && ea.tagName === "DETAILS")) ea.removeAttribute(name);
   }
   for (const { name, value } of [...eb.attributes]) if (ea.getAttribute(name) !== value) { ea.setAttribute(name, value); if (name !== "p-updated") mark(ea); }
 
-  if (!local && (ea instanceof HTMLInputElement || ea instanceof HTMLTextAreaElement || ea instanceof HTMLSelectElement)) {
-    if (document.activeElement !== ea) {
-      if (ea instanceof HTMLInputElement && (ea.type === "checkbox" || ea.type === "radio")) ea.checked = eb.hasAttribute("checked");
-      else ea.value = (eb as HTMLInputElement).value;
-    }
+  // Take the server's value only when the server changed it, and never under the caret.
+  if (ea !== document.activeElement) {
+    if (eb.defaultValue !== dv) ea.value = ea.defaultValue = eb.defaultValue;
+    if (eb.defaultChecked !== dc) ea.checked = eb.defaultChecked;
+    if (eb.defaultSelected !== ds) ea.selected = eb.defaultSelected;
   }
   children(ea, eb);
 }
