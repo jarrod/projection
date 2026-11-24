@@ -1,9 +1,14 @@
-import { defineUi, html, Header, Button, Badge, Dot, Stat, Grid, Table, Tabs, Dialog, Form, Input, Textarea, Close, Empty, Stack, Card, Muted } from "mcp-projection";
+import { defineUi, themes, ThemeToggle, html, Header, Button, Badge, Dot, Stat, Grid, Table, Tabs, Dialog, Form, Input, Textarea, Close, Empty, Stack, Card, Muted } from "mcp-projection";
 import { store, type Note } from "./store.js";
+import { paper } from "./theme.js";
+
+// UI_THEME picks a look: a shipped theme (terminal, pop), our own (paper, in theme.ts), or the default.
+const css = { terminal: themes.terminal, pop: themes.pop, paper }[process.env.UI_THEME ?? ""];
 
 export const ui = defineUi({
   name: "notes",
   attachTo: ["list_notes"],
+  css,
   web: { origin: process.env.UI_ORIGIN ?? "http://localhost:3000", tool: "open_notes_in_browser" },
   view: ({ params }) => {
     const q = String(params.q ?? "").toLowerCase();
@@ -14,7 +19,7 @@ export const ui = defineUi({
         ${Header({
           title: "Notes",
           description: html`<span class="row" style="--gap:6px">${Dot({ tone: "ok", pulse: true, label: "Live" })} Live, shared with your assistant</span>`,
-          actions: Button({ opens: "new-note", icon: "plus" }, "New note"),
+          actions: [ThemeToggle(), Button({ opens: "new-note", icon: "plus" }, "New note")],
         })}
         ${Grid({ min: 160 },
           Stat({ label: "Notes", value: notes.length }),

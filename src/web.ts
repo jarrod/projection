@@ -1,6 +1,9 @@
 // Web mode: the same view on a normal URL. There is no sign-in: a browser session is delegated from an MCP request
 // through a single-use link, and acts as that MCP user. Standard fetch handler (Request → Response), plus a Node adapter.
 import { createHash, randomBytes } from "node:crypto";
+import { brotliCompress, gzip, constants as zc } from "node:zlib";
+import { promisify } from "node:util";
+const br = promisify(brotliCompress), gz = promisify(gzip);
 import type { SyncState, SyncResult } from "./ui.js";
 
 export type WebOptions = {
@@ -91,7 +94,8 @@ export function createWeb(d: Deps, opts: WebOptions) {
 
   return {
     fetch,
-    /** Node http adapter: http.createServer((req, res) => site.node(req, res, next?)). */
+    /** Node http adapter: http.createServer((req, res) => site.node(req, res, next?)). Compresses with brotli or gzip.
+     *  `fetch` leaves compression to the platform (Cloudflare, Deno Deploy and most CDNs do it). */
     async node(req: any, res: any, next?: () => void) {
       const chunks: Buffer[] = [];
       if (req.method !== "GET" && req.method !== "HEAD") for await (const c of req) chunks.push(c);
@@ -99,8 +103,12 @@ export function createWeb(d: Deps, opts: WebOptions) {
         method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined,
       }));
       if (!r) return next ? next() : (res.statusCode = 404, res.end());
-      res.writeHead(r.status, Object.fromEntries(r.headers));
-      res.end(Buffer.from(await r.arrayBuffer()));
+      const h = Object.fromEntries(r.headers), ae = String(req.headers["accept-encoding"] ?? "");
+      let body: Buffer = Buffer.from(await r.arrayBuffer());
+      const enc = body.length < 1024 ? "" : /\bbr\b/.test(ae) ? "br" : /\bgzip\b/.test(ae) ? "gzip" : "";
+      if (enc) { body = await (enc === "br" ? br(body, { params: { [zc.BROTLI_PARAM_QUALITY]: 5 } }) : gz(body)); h["content-encoding"] = enc; h.vary = "Accept-Encoding"; }
+      res.writeHead(r.status, h);
+      res.end(body);
     },
     /** Mint a single-use link. Use ui.link(extra), which binds it to the MCP request's user, auth and server. */
     link(user: string, call: Call, until?: number) {

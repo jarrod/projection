@@ -1,0 +1,34 @@
+/* pop: bright and soft. Violet accent, filled pastel tags, rounded, tinted stat cards.
+   Fixed colours: it does not follow the host's palette.
+   Use: defineUi({ css: themes.pop }). Add your own CSS after it to tweak. */
+@layer p.theme {
+  :root {
+    --p-bg: light-dark(#fff, #15121f);
+    --p-bg-2: light-dark(#faf8ff, #1b1828);
+    --p-bg-3: light-dark(#f1edff, #262138);
+    --p-fg: light-dark(#1d1830, #f2effa);
+    --p-fg-2: light-dark(#5f5873, #b4adc8);
+    --p-fg-3: light-dark(#9690aa, #7d7693);
+    --p-line: light-dark(#ece8f5, #2a2540);
+    --p-line-2: light-dark(#ddd7ec, #3a3354);
+    --p-inv: light-dark(#6d4aff, #8f75ff);
+    --p-inv-fg: #fff;
+    --p-ring: light-dark(#6d4aff, #8f75ff);
+    --p-ok: light-dark(#0f9d58, #3ddc84);
+    --p-warn: light-dark(#d97706, #ffb547);
+    --p-bad: light-dark(#e5304a, #ff6b81);
+    --p-info: light-dark(#2f6bff, #6b9bff);
+    --p-r: 10px;
+    --p-r-sm: 6px;
+    --p-shadow: 0 8px 24px light-dark(rgb(76 52 180 / .12), rgb(0 0 0 / .5)), 0 0 0 1px var(--p-line);
+  }
+  .badge { border-radius: 99px; padding: 0 8px; font: 500 12px/1 var(--p-font); box-shadow: none;
+    color: color-mix(in srgb, var(--t, var(--p-fg-2)) 80%, var(--p-fg)); background: color-mix(in srgb, var(--t, var(--p-fg-3)) 16%, var(--p-bg)); }
+  .badge.outline { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t, var(--p-fg-3)) 40%, transparent); }
+  .stat { border: 0; background: color-mix(in srgb, var(--s, #6d4aff) 13%, var(--p-bg)); }
+  .stat:nth-child(4n+2) { --s: #ff8a4c; } .stat:nth-child(4n+3) { --s: #12b886; } .stat:nth-child(4n+4) { --s: #2f9bff; }
+  .card { box-shadow: 0 1px 2px light-dark(rgb(76 52 180 / .06), transparent); }
+  .tabs > input:checked + label { color: var(--p-inv); border-color: var(--p-inv); }
+  .input:focus { border-color: var(--p-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-ring) 20%, transparent); }
+  .tbl tbody tr:hover { background: color-mix(in srgb, var(--p-inv) 5%, var(--p-bg)); }
+}

@@ -28,6 +28,8 @@ const P: Record<string, string> = {
   chevron: "m6 4 4 4-4 4", down: "m4 6 4 4 4-4", search: "m13 13-2.6-2.6M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z",
   trash: "M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5", pin: "M6 2.5h4M7 2.5v4L4.5 9h7L9 6.5v-4M8 9v4.5",
   external: "M9.5 2.5h4v4M13.5 2.5 7 9M12 9.5v4H2.5V4h4", refresh: "M13 8a5 5 0 1 1-1.5-3.5M13 3v2.5h-2.5",
+  sun: "M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z",
+  moon: "M13.5 9.5a5.5 5.5 0 1 1-7-7 4.5 4.5 0 0 0 7 7Z", monitor: "M2 3h12v8H2zM5.5 14h5M8 11v3",
 };
 export type IconName = keyof typeof P;
 export const Icon = (name: IconName | string) =>
@@ -133,6 +135,12 @@ export const Tabs = (p: { id: string; tabs: { label: unknown; content: unknown }
   html`<div class="tabs" id="${p.id}">${p.tabs.map((t, i) =>
     html`<input type="radio" name="${p.id}" id="${p.id}-${i}"${attrs({ checked: i === (p.selected ?? 0) })}><label for="${p.id}-${i}">${t.label}</label>`)}${p.tabs.map((t) =>
     html`<div class="panel">${t.content}</div>`)}</div>`;
+
+/** System / light / dark switch. Pure CSS: the choice lives in this browser tab and survives live updates.
+ *  Hidden inside MCP hosts that set a theme, since the host owns it there. Use once per view. */
+export const ThemeToggle = () =>
+  html`<div class="mode" role="radiogroup" aria-label="Theme">${(["system", "light", "dark"] as const).map((m) =>
+    html`<input type="radio" name="p-mode" id="p-mode-${m}" aria-label="${m}"${attrs({ checked: m === "system" })}><label for="p-mode-${m}" title="${m}">${Icon(m === "system" ? "monitor" : m === "light" ? "sun" : "moon")}</label>`)}</div>`;
 
 /** Modal dialog. Open it with Button({ opens: id }). Put a Form({ tool, close: true }) inside for actions. */
 export const Dialog = (p: { id: string; title: string; description?: unknown }, ...c: Kids) =>

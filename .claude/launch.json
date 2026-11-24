@@ -1,0 +1,52 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "notes-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tests/web-server.mjs"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "notes-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tests/dev.mjs"
+      ],
+      "port": 3000,
+      "url": "http://localhost:3000"
+    },
+    {
+      "name": "notes-dev-terminal",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "UI_THEME=terminal",
+        "node",
+        "tests/dev.mjs"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "notes-dev-pop",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "UI_THEME=pop",
+        "node",
+        "tests/dev.mjs"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "notes-dev-paper",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "UI_THEME=paper",
+        "node",
+        "tests/dev.mjs"
+      ],
+      "port": 3000
+    }
+  ]
+}

@@ -54,7 +54,8 @@ Layout: `Stack Row Grid Separator Header Card`
 Controls: `Button Form Input Textarea Select Checkbox` (pass `tool` + `args`, or `set`; `close`)
 Display: `Badge Dot Stat Table Empty Skeleton Kbd Muted Mono Icon`
 Overlays: `Dialog` + `Button({ opens: id })` + `Close(id)`, `Menu({ id, items })`, `Tabs({ id, tabs })`
-Tones: `neutral ok warn bad info`. Icons: `plus check x more chevron down search trash pin external refresh`.
+Theme: `ThemeToggle()` (system / light / dark, pure CSS, hidden in hosts that set a theme)
+Tones: `neutral ok warn bad info`. Icons: `plus check x more chevron down search trash pin external refresh sun moon monitor`.
 
 ## Attributes the runtime understands
 | attr | meaning |
@@ -78,6 +79,7 @@ http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or: 
 - Access only through single-use links: the opt-in agent tool, or `ui.openInBrowser(extra, { server })` / `ui.link(extra)` inside a tool handler. The tool uses MCP URL elicitation, so the link goes to the host, not into the model's context. Without elicitation support it falls back to returning the link as text.
 - GET on a link shows a Continue page; POST redeems it, then sets an HttpOnly, SameSite=Lax, path-scoped cookie. Tokens are stored hashed.
 - `ui.site.revoke(user)` ends a user's links and sessions.
+- `site.node` compresses responses (brotli, else gzip). With `site.fetch`, compression is left to the platform or CDN.
 - Tool handlers called from the web get `extra.authInfo` but cannot send notifications or requests (elicitation, sampling) to a client.
 
 ## Testing (no browser)
@@ -97,8 +99,13 @@ Snapshot HTML: `await ui.render({ q: "x" }, "u1")`.
 `npx mcp-projection preview dist/ui.js ['{"q":"x"}'] [--dark] > preview.html` gives a styled static page (no runtime). Screenshot it.
 
 ## Styling
-- Tokens (`--p-bg --p-fg --p-line --p-ring --p-r --p-font ...`) fall back to the host's MCP Apps variables (`--color-background-primary`, `--font-sans` ...), so the UI matches the host's theme.
-- Add CSS with `defineUi({ css })`. Replace the kit entirely with `bare: true`.
+- Two files, two cascade layers: `src/ui/tokens.css` holds every design token (`--p-bg --p-fg --p-line --p-ring --p-r --p-font ...`), and `src/ui/kit.css` styles the components using only those tokens.
+- Token values are `light-dark(light, dark)` and fall back to the host's MCP Apps variables (`--color-background-primary`, `--font-sans` ...), so the UI matches the host.
+- Your `defineUi({ css })` is unlayered, so it always wins, whatever the selector: `css: ":root { --p-r: 6px }"`.
+- Themes: `css: themes.terminal` (black, monospace, square) or `themes.pop` (bright: violet accent, pastel pill tags, rounded, tinted stats). Tweak with `` css: themes.terminal + `:root { --p-bg: #050505 }` ``. To write one, copy `src/ui/themes/terminal.css`: a `@layer p.theme { ... }` block that sets tokens and may restyle components.
+- Your own theme needs no layer: a plain `:root { --p-... }` block plus any component tweaks. See `examples/notes-server/src/theme.ts` (`UI_THEME=paper`). Fixed colours stop the UI following the host's palette; the default tokens are the ones that follow it.
+- Light and dark: the host's theme (`data-theme`) wins, then `ThemeToggle()`, then the OS. Keep your own colours as `light-dark()` pairs so both modes work.
+- `bare: true` drops the tokens and the kit. `css: TOKENS + myKit` keeps the tokens and replaces the components.
 
 ## Not included (by design)
 Client state stores, client routing, JSX, a build step, per-fragment updates, its own sign-in. The whole view renders on each change and only the HTML that differs reaches the DOM.

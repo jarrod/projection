@@ -6,6 +6,7 @@ Library: `mcp-projection`. It adds a live, styled UI for humans to an MCP server
 - Layout: library in `src/` (`ui.ts` core and MCP attach, `web.ts` web mode, `ui/` components and CSS) and `src/client/` (browser runtime, bundled into `dist/assets.js` by `build.mjs`). Example integration in `examples/notes-server/`. End-to-end tests in `tests/`.
 - Build: `npm install && npm run build`. The build fails if a size budget is exceeded. Don't raise a budget without a reason.
 - Test: `npm test` (agent snapshot + unit + MCP host). `npm run test:web` also runs real Chrome via Python Playwright (`pip install playwright`; set `CHROME_PATH` or run `playwright install chromium`).
+- Dev loop: `node tests/dev.mjs`, then open http://localhost:3000/dev. Edits to `src/` or the example rebuild (about 1 s), restart with seed data, and the open page reloads itself.
 - Invariants:
   - Agent tool results never change. `npm test` diffs `tests/agent-snapshot.mjs` output against `tests/baseline.json`.
   - No client JavaScript beyond the runtime.
