@@ -23,7 +23,7 @@ const act = (a: Action) => ({
 });
 
 // ---------- icons (inline, 1.5 stroke) ----------
-const P: Record<string, string> = {
+const P = {
   plus: "M8 3v10M3 8h10", check: "m3.5 8.5 3 3 6-7", x: "m4 4 8 8M12 4l-8 8", more: "M3.5 8h.01M8 8h.01M12.5 8h.01",
   chevron: "m6 4 4 4-4 4", down: "m4 6 4 4 4-4", search: "m13 13-2.6-2.6M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z",
   trash: "M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5", pin: "M6 2.5h4M7 2.5v4L4.5 9h7L9 6.5v-4M8 9v4.5",
@@ -32,8 +32,9 @@ const P: Record<string, string> = {
   moon: "M13.5 9.5a5.5 5.5 0 1 1-7-7 4.5 4.5 0 0 0 7 7Z", monitor: "M2 3h12v8H2zM5.5 14h5M8 11v3",
 };
 export type IconName = keyof typeof P;
+const paths: Record<string, string> = P;
 export const Icon = (name: IconName | string) =>
-  raw(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[name] ?? ""}"/></svg>`);
+  raw(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${Object.hasOwn(paths, name) ? paths[name] : ""}"/></svg>`);
 
 // ---------- layout ----------
 export const Stack = (p: { gap?: number } = {}, ...c: Kids) => html`<div class="stack"${attrs({ style: p.gap != null && `--gap:${p.gap}px` })}>${c}</div>`;
@@ -144,7 +145,7 @@ export const ThemeToggle = () =>
 
 /** Modal dialog. Open it with Button({ opens: id }). Put a Form({ tool, close: true }) inside for actions. */
 export const Dialog = (p: { id: string; title: string; description?: unknown }, ...c: Kids) =>
-  html`<div class="dialog" popover id="${p.id}" role="dialog" aria-labelledby="${p.id}-t"><h2 id="${p.id}-t">${p.title}</h2>${p.description != null && html`<p>${p.description}</p>`}<div class="stack">${c}</div></div>`;
+  html`<div class="dialog" popover tabindex="-1" autofocus id="${p.id}" role="dialog" aria-labelledby="${p.id}-t"><h2 id="${p.id}-t">${p.title}</h2>${p.description != null && html`<p>${p.description}</p>`}<div class="stack">${c}</div></div>`;
 /** Cancel button for dialogs. */
 export const Close = (target: string, label = "Cancel") =>
   html`<button type="button" class="btn secondary" popovertarget="${target}" popovertargetaction="hide">${label}</button>`;
@@ -152,7 +153,7 @@ export const Close = (target: string, label = "Cancel") =>
 export type MenuItem = (Action & { label: string; icon?: IconName; kbd?: string; danger?: boolean; href?: string }) | "-";
 /** Dropdown menu anchored to its trigger. Trigger it with Button({ opens: id }). */
 export const Menu = (p: { id: string; items: MenuItem[] }) =>
-  html`<div class="menu" popover id="${p.id}" role="menu">${p.items.map((it) =>
+  html`<div class="menu" popover id="${p.id}">${p.items.map((it) =>
     it === "-" ? html`<hr>` :
-    it.href ? html`<a role="menuitem"${attrs({ href: it.href, target: "_blank", rel: "noopener" })}>${it.icon && Icon(it.icon)}${it.label}</a>` :
-    html`<button type="button" role="menuitem"${attrs({ class: it.danger && "bad", ...act({ ...it, close: it.close ?? true }) })}>${it.icon && Icon(it.icon)}${it.label}${it.kbd && Kbd(it.kbd)}</button>`)}</div>`;
+    it.href && /^(https?:|mailto:|[/#?.])/i.test(it.href) ? html`<a${attrs({ href: it.href, target: "_blank", rel: "noopener" })}>${it.icon && Icon(it.icon)}${it.label}</a>` :
+    html`<button type="button"${attrs({ class: it.danger && "bad", ...act({ ...it, close: it.close ?? true }) })}>${it.icon && Icon(it.icon)}${it.label}${it.kbd && Kbd(it.kbd)}</button>`)}</div>`;

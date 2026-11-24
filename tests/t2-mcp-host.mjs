@@ -40,7 +40,7 @@ ok(await until(() => document.body.textContent.includes("Live from agent")), "ag
 const input = document.querySelector("#new-note input[name=title]");
 input.focus(); input.value = "half-typed";
 await agent.callTool({ name: "add_note", arguments: { title: "Second agent note", body: "" } });
-await until(() => document.body.textContent.includes("Second agent note"));
+ok(await until(() => document.body.textContent.includes("Second agent note")), "second agent change arrived");
 const sameInput = document.querySelector("#new-note input[name=title]");
 ok(sameInput === input && input.value === "half-typed" && document.activeElement === input, "morph kept the same input node, its value and focus");
 
@@ -48,7 +48,7 @@ ok(sameInput === input && input.value === "half-typed" && document.activeElement
 const body = document.querySelector("#new-note textarea[name=body]");
 body.focus();
 await agent.callTool({ name: "add_note", arguments: { title: "Third agent note", body: "" } });
-await until(() => document.body.textContent.includes("Third agent note"));
+ok(await until(() => document.body.textContent.includes("Third agent note")), "third agent change arrived");
 ok(input.value === "half-typed", "morph kept a typed value in a field that no longer has focus");
 input.value = "";
 
@@ -76,9 +76,41 @@ ok((await agent.callTool({ name: "list_notes", arguments: {} })).content[0].text
 const form = document.querySelector("#new-note form");
 form.querySelector("[name=title]").value = "Made by a human";
 form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+const again = new Event("submit", { bubbles: true, cancelable: true }); form.dispatchEvent(again);
+ok(again.defaultPrevented, "a second submit while the call is in flight is swallowed, not sent natively");
 ok(await until(() => document.querySelector("#notes-all")?.textContent.includes("Made by a human")), "dialog form → add_note → new row");
 ok(await until(() => form.querySelector("[name=title]").value === ""), "form reset after success");
 const errs = [...document.querySelectorAll("[p-error]")].map((e) => e.tagName + ": " + e.getAttribute("p-error")); ok(!errs.length, "no error states rendered " + errs.join(" | "));
+
+// --- morph on its own: the cases the notes UI cannot reach ---
+{
+  const { build } = await import("../node_modules/esbuild/lib/main.js");
+  const js = (await build({ entryPoints: [new URL("../src/client/morph.ts", import.meta.url).pathname], bundle: true, format: "esm", write: false, logLevel: "silent" })).outputFiles[0].text;
+  const { morph } = await import("data:text/javascript," + encodeURIComponent(js));
+  const el = (h) => { const t = document.createElement("template"); t.innerHTML = h; return t.content.firstElementChild; };
+  const mount = (h) => document.body.appendChild(el(h));
+
+  const list = mount(`<ul><li id="r1">1</li><li id="r2"><input></li><li id="r3">3</li></ul>`), r2 = list.children[1];
+  let moves = 0; const ib = list.insertBefore.bind(list); list.insertBefore = (...a) => { moves++; return ib(...a); };
+  morph(list, el(`<ul><li id="r2"><input></li><li id="r3">3</li></ul>`));
+  ok(moves === 0 && list.children.length === 2 && list.children[0] === r2, "deleting a keyed row moves no other row (focus and open menus survive)");
+
+  const box = mount(`<p><input type="checkbox"></p>`), cb = box.firstElementChild;
+  cb.focus(); cb.checked = true;
+  morph(box, el(`<p><input type="checkbox" checked></p>`)); morph(box, el(`<p><input type="checkbox"></p>`));
+  ok(cb.checked === false, "a focused checkbox still follows a server change");
+
+  const wrap = mount(`<p><input value="a"></p>`), inp = wrap.firstElementChild;
+  inp.focus(); inp.value = "typing";
+  morph(wrap, el(`<p><input value="server"></p>`));
+  const kept = inp.value === "typing";
+  inp.blur(); morph(wrap, el(`<p><input value="server"></p>`));
+  ok(kept && inp.value === "server", "text under the caret is kept, and the server's value lands once focus has moved on");
+
+  const busy = mount(`<p><button aria-busy="true" p-error="x" data-old="1">b</button></p>`);
+  morph(busy, el(`<p><button>b</button></p>`));
+  ok(busy.firstElementChild.getAttribute("aria-busy") === "true" && busy.firstElementChild.getAttribute("p-error") === "x" && !busy.firstElementChild.hasAttribute("data-old"), "morph leaves aria-busy and p-error to the runtime");
+}
 
 await GlobalRegistrator.unregister();
 console.log(fails ? `\n${fails} FAILED` : "\nall MCP host checks passed");

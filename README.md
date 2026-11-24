@@ -7,7 +7,7 @@ Add a live, styled UI for humans to any MCP server without bringing a web framew
 - **Live with nothing to declare.** After any tool call, by the agent or the human, open UIs render again and only the changed rows update and highlight.
 - **Humans use the agent's tools.** A click makes the same `tools/call` the agent makes: same validation, same handler.
 - **No sign-in.** The viewer is the MCP user. On a URL, the session is delegated from MCP through a single-use link the agent hands over.
-- **Stateless and small.** The server keeps no per-viewer state. About 2.3 KB gzipped of browser JavaScript plus 3.6 KB of CSS. No dependencies beyond the MCP SDK and zod your server already has.
+- **Stateless and small.** The server keeps no per-viewer state. About 2.5 KB gzipped of browser JavaScript plus 3.6 KB of CSS. No dependencies beyond the MCP SDK and zod your server already has.
 
 ![Notes example, light](docs/screenshots/shot-light.png)
 

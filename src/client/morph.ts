@@ -2,7 +2,7 @@
 // Keeps focus, caret, scroll, open popovers and anything the user has typed, ticked or selected.
 
 const same = (a: Node, b: Node) =>
-  a.nodeType === b.nodeType && a.nodeName === b.nodeName && ((a as Element).id || "") === ((b as Element).id || "");
+  a.nodeName === b.nodeName && (a as Element).id === (b as Element).id; // nodeName also tells node types apart ("#text", "DIV")
 
 /** Elements whose content or attributes changed during the last morph (used for the update highlight). */
 export const changed = new Set<Element>();
@@ -17,28 +17,33 @@ export function morph(a: Node, b: Node) {
   const dv = ea.defaultValue, dc = ea.defaultChecked, ds = ea.defaultSelected;
 
   for (const { name } of [...ea.attributes]) {
-    if (!eb.hasAttribute(name) && !(name === "open" && ea.tagName === "DETAILS")) ea.removeAttribute(name);
+    // `open` belongs to the user (a details they opened); aria-busy and p-error to the runtime: an update landing mid-call must not clear them.
+    if (!eb.hasAttribute(name) && name !== "open" && name !== "aria-busy" && name !== "p-error") ea.removeAttribute(name);
   }
-  for (const { name, value } of [...eb.attributes]) if (ea.getAttribute(name) !== value) { ea.setAttribute(name, value); if (name !== "p-updated") mark(ea); }
+  // Text under the caret is left alone, attribute included, so the server's new value is still seen as a change once focus moves on.
+  const typing = ea === document.activeElement;
+  for (const { name, value } of eb.attributes) if (ea.getAttribute(name) !== value && !(typing && name === "value")) { ea.setAttribute(name, value); if (name !== "p-updated") mark(ea); }
 
-  // Take the server's value only when the server changed it, and never under the caret.
-  if (ea !== document.activeElement) {
-    if (eb.defaultValue !== dv) ea.value = ea.defaultValue = eb.defaultValue;
-    if (eb.defaultChecked !== dc) ea.checked = eb.defaultChecked;
-    if (eb.defaultSelected !== ds) ea.selected = eb.defaultSelected;
-  }
+  // Take the server's value only when the server changed it.
+  if (eb.defaultValue !== dv && !typing) ea.value = ea.defaultValue = eb.defaultValue;
+  if (eb.defaultChecked !== dc) ea.checked = eb.defaultChecked;
+  if (eb.defaultSelected !== ds) ea.selected = eb.defaultSelected;
   children(ea, eb);
 }
 
 function children(a: Element, b: Element) {
   if (a instanceof HTMLTextAreaElement) return;
-  const byId = new Map<string, Element>();
+  const byId = new Map<string, Element>(), ids = new Set<string>();
   for (const c of a.children) if (c.id) byId.set(c.id, c);
+  for (const c of b.children) ids.add(c.id);
+  const gone = (n: ChildNode | null): n is Element => !!(n as Element | null)?.id && !ids.has((n as Element).id);
   let cur: ChildNode | null = a.firstChild;
   for (const nb of [...b.childNodes]) {
     const id = (nb as Element).id;
     const hit = id ? byId.get(id) : undefined;
     if (hit) {
+      // Drop removed rows first: moving `hit` up past them would cost it focus and close its popover.
+      while (cur !== hit && gone(cur)) { const n: ChildNode | null = cur.nextSibling; cur.remove(); cur = n; }
       if (hit !== cur) a.insertBefore(hit, cur);
       cur = hit.nextSibling;
       morph(hit, nb);

@@ -28,9 +28,9 @@ export async function testUi(factory: Factory) {
 
   /** Open the UI like a host would, with optional view params. */
   async function mount(params: Record<string, unknown> = {}) {
-    let doc = "", h: string | undefined, v: number | undefined, gen = 0, closed = false;
+    let doc = "", h: string | undefined, v: number | undefined, gen = 0, closed = false, poll: AbortController | undefined;
     const once = async (g: number) => {
-      const s: any = await host.callTool({ name: "p_sync", arguments: { params, h, v } });
+      const s: any = await host.callTool({ name: "p_sync", arguments: { params, h, v } }, undefined, { signal: poll!.signal });
       if (s.isError) throw new Error(s.content?.[0]?.text);
       if (g !== gen || closed) return;
       const r = s.structuredContent;
@@ -40,9 +40,11 @@ export async function testUi(factory: Factory) {
     /** Render now, then keep following changes (what the runtime does after an action). */
     const refresh = async () => {
       const g = ++gen;
+      poll?.abort(); // like the runtime: a new poll cancels the one it replaces
+      poll = new AbortController();
       v = undefined;
       await once(g);
-      (async () => { while (g === gen && !closed) await once(g).catch(() => { closed = true; }); })();
+      (async () => { while (g === gen && !closed) await once(g).catch(() => { if (g === gen) closed = true; }); })(); // a cancelled poll is not a closed view
     };
     await refresh();
     return {
@@ -63,7 +65,7 @@ export async function testUi(factory: Factory) {
         while (Date.now() - t0 < ms) { if (pred(textOf(doc), doc)) return; await new Promise((r) => setTimeout(r, 10)); }
         throw new Error(`until() timed out. Current UI text: ${textOf(doc).slice(0, 300)}`);
       },
-      close() { closed = true; },
+      close() { closed = true; poll?.abort(); },
     };
   }
 

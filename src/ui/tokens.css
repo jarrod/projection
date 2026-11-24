@@ -10,9 +10,10 @@
     --p-bg-3: var(--color-background-tertiary, light-dark(#f2f2f2, #1a1a1a));
     --p-fg: var(--color-text-primary, light-dark(#0a0a0a, #ededed));
     --p-fg-2: var(--color-text-secondary, light-dark(#5e5e5e, #a1a1a1));
-    --p-fg-3: var(--color-text-tertiary, light-dark(#8f8f8f, #707070));
+    --p-fg-3: var(--color-text-tertiary, light-dark(#6b6b6b, #858585));
     --p-line: var(--color-border-primary, light-dark(#ebebeb, #232323));
     --p-line-2: var(--color-border-secondary, light-dark(#d4d4d4, #333));
+    --p-edge: color-mix(in srgb, var(--p-fg-3) 75%, var(--p-bg)); /* edge of an input or checkbox: 3:1 against the page */
     --p-inv: var(--color-background-inverse, light-dark(#0a0a0a, #ededed));
     --p-inv-fg: var(--color-text-inverse, light-dark(#fff, #0a0a0a));
     --p-ring: var(--color-ring-primary, light-dark(#0a72ef, #3291ff));

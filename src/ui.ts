@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { RUNTIME, WEB, CSS } from "./assets.js";
 import { createWeb, type WebOptions } from "./web.js";
-import type { Html } from "./html.js";
+import { isHtml, type Html } from "./html.js";
 
 export const MCP_APP_MIME = "text/html;profile=mcp-app";
 const SYNC = "p_sync";
@@ -31,7 +31,8 @@ export type UiOptions = {
   css?: string;
   /** Skip the built-in kit CSS entirely. */
   bare?: boolean;
-  /** Map an MCP request to a stable user id. Default: authInfo.extra.sub → authInfo.clientId → "local". */
+  /** Map an MCP request to a stable user id. Default: authInfo.extra.sub, or "local" when the request carries no auth.
+   *  An authenticated request with no subject throws: a client id names the agent app, not the person using it. */
   identify?: (extra: any) => string;
   /** Override the ui:// URI. */
   uri?: string;
@@ -43,6 +44,13 @@ export type UiOptions = {
   };
 };
 
+/** The part of an MCP request's `extra` that this library reads. */
+export type Extra = {
+  authInfo?: { clientId?: string; expiresAt?: number; extra?: Record<string, unknown> };
+  requestId?: string | number;
+  signal?: AbortSignal;
+  [FROM_WEB]?: true;
+};
 type ToolCall = (request: any, extra: any) => Promise<any>;
 type ServerLike = { registerTool: (...a: any[]) => any; registerResource: (...a: any[]) => any; server: any };
 
@@ -55,18 +63,41 @@ const method = (schema: any) => { const m = schema?.shape?.method; return m?.val
 
 export function defineUi(o: UiOptions) {
   const uri = o.uri ?? `ui://${o.name}/app.html`;
-  const identify = o.identify ?? ((extra: any) => extra?.authInfo?.extra?.sub ?? extra?.authInfo?.clientId ?? "local");
+  const identify = (extra?: Extra): string => {
+    const a = extra?.authInfo, user = o.identify ? o.identify(extra) : a ? a.extra?.sub : "local";
+    // No id means no user: never fall back to a shared one. A client id names the agent app, not the person using it.
+    if (user == null || user === "") throw new Error("No user id: set authInfo.extra.sub in your token verifier, or return one from defineUi({ identify }).");
+    return String(user);
+  };
   const css = (o.bare ? "" : CSS) + (o.css ?? "");
+  if (/<\/style/i.test(css)) throw new Error("css must not contain </style");
   const calls = new WeakMap<object, ToolCall>();
-  let latest: object | undefined;
 
   // ---- change signal: one counter, and the viewers waiting for it to move ----
-  let version = 0;
+  // Starts at a random point so two instances behind one load balancer never hold the same number by accident.
+  let version = Math.floor(Math.random() * 2 ** 40);
   const waiting = new Set<() => void>();
+  let due = false;
   /** Signal that data changed outside a tool call (cron, webhook, queue). Tool calls do this by themselves. */
-  const write = () => { version++; [...waiting].forEach((w) => w()); };
+  const write = () => {
+    version++;
+    // Viewers are woken after the caller has moved on, so a tool call never waits for their renders, and a burst of writes wakes them once.
+    if (!due) { due = true; setTimeout(() => { due = false; [...waiting].forEach((w) => w()); }); }
+  };
 
-  const render = async (params: Params = {}, user = "local") => `<p-f id="p-root">${(await o.view({ user, params })).__html}</p-f>`;
+  const render = async (params: Params = {}, user = "local") => {
+    const r = await o.view({ user, params });
+    if (!isHtml(r)) throw new Error("view must return html`...`.");
+    return `<p-f id="p-root">${r.__html}</p-f>`;
+  };
+  // Viewers asking for the same thing at the same moment share one render. Nothing is kept once it settles.
+  const flight = new Map<string, Promise<{ h: string; html: string }>>();
+  const shared = (user: string, params?: Params) => {
+    const k = version + "\0" + user + "\0" + JSON.stringify(params);
+    let p = flight.get(k);
+    if (!p) flight.set(k, p = render(params, user).then((html) => ({ h: hash(html), html })).finally(() => flight.delete(k)));
+    return p;
+  };
 
   /** Render for a viewer. If they are up to date (`v`), wait for a change first; send HTML only if it differs from what they show (`h`). */
   async function sync(user: string, s: SyncState = {}, waitMs = 25_000, signal?: AbortSignal): Promise<SyncResult> {
@@ -77,7 +108,7 @@ export function defineUi(o: UiOptions) {
       signal?.addEventListener("abort", done);
     });
     if (signal?.aborted) throw new Error("cancelled"); // the viewer left or asked again: don't render for nobody
-    const v = version, html = await render(s.params, user), h = hash(html);
+    const v = version, { h, html } = await shared(user, s.params);
     return h === s.h ? { v, h } : { v, h, html };
   }
 
@@ -90,18 +121,26 @@ export function defineUi(o: UiOptions) {
   function attach<S extends ServerLike>(server: S): S {
     if (calls.has(server)) throw new Error("ui.attach() was already called for this server.");
     const inner = server.server, set = inner.setRequestHandler.bind(inner);
+    const readOnly = new Set<string>(), reg = server.registerTool.bind(server);
+    let seen = false;
+    // Tools annotated readOnlyHint change nothing, so their calls wake nobody. Noted at registration, and again from tools/list for other registration styles.
+    server.registerTool = (name: string, cfg: any, ...rest: any[]) => { if (cfg?.annotations?.readOnlyHint) readOnly.add(name); return reg(name, cfg, ...rest); };
 
     // The one seam: every tools/call (agent or human, any registration style) passes through here, then viewers refresh.
     inner.setRequestHandler = (schema: unknown, h: ToolCall) => {
       const m = method(schema), next = h;
+      seen = true;
       if (m === "tools/call") calls.set(server, (h = async (req, extra) => {
         const r = await next(req, extra);
-        if (req.params.name !== SYNC) write();
+        if (req.params.name !== SYNC && !readOnly.has(req.params.name)) write();
         return r;
       }));
-      else if (m === "tools/list" && o.attachTo) h = async (req, extra) => {
+      else if (m === "tools/list") h = async (req, extra) => {
         const r = await next(req, extra);
-        for (const t of r.tools) if (o.attachTo!.includes(t.name)) t._meta = { ...t._meta, ui: { ...t._meta?.ui, resourceUri: uri } };
+        for (const t of r.tools) {
+          t.annotations?.readOnlyHint ? readOnly.add(t.name) : readOnly.delete(t.name);
+          if (o.attachTo?.includes(t.name)) t._meta = { ...t._meta, ui: { ...t._meta?.ui, resourceUri: uri } };
+        }
         return r;
       };
       return set(schema, h);
@@ -110,32 +149,34 @@ export function defineUi(o: UiOptions) {
     server.registerResource(`${o.name}-ui`, uri, { mimeType: MCP_APP_MIME, description: `${o.name} UI` }, async () => ({
       contents: [{ uri, mimeType: MCP_APP_MIME, text: shell() }],
     }));
+    seen = false;
     server.registerTool(SYNC, {
       description: "UI: render, or wait for a change", _meta: { ui: { visibility: ["app"] } },
       inputSchema: { params: z.record(z.string(), z.any()).optional(), h: z.string().optional(), v: z.number().optional() },
-    }, async (s: SyncState, extra: any) => ({ ...text("ok"), structuredContent: await sync(identify(extra), s, undefined, extra?.signal) }));
-    if (!calls.has(server)) throw new Error("ui.attach(server) must be called before any tool is registered on the server.");
+    }, async (s: SyncState, extra: Extra) => ({ ...text("ok"), structuredContent: await sync(identify(extra), s, undefined, extra?.signal) }));
+    if (!calls.has(server)) throw new Error(seen
+      ? "This @modelcontextprotocol/sdk version is not supported: tools/call handler not recognised."
+      : "ui.attach(server) must be called before any tool is registered on the server.");
 
     if (o.web?.tool) server.registerTool(o.web.tool, {
       description: o.web.toolDescription ?? `Open the ${o.name} UI in the user's web browser with a private, single-use link.`,
-    }, async (extra: any) => {
+    }, async (extra: Extra) => {
       const r = await openInBrowser(extra, { server });
       return text(r.opened ? `Opened ${o.name} in the user's browser.`
         : r.declined ? "The user declined to open the browser."
         : `Share this private link with the user. It works once and expires in ${o.web!.linkTtl ?? 120} seconds: ${r.url}`);
     });
 
-    latest = server;
     return server;
   }
 
   const site = o.web ? createWeb({ name: o.name, css, runtime: WEB, sync }, o.web) : undefined;
 
   /** Mint a single-use web link for the user behind an MCP request. The browser session acts as that user:
-   *  its tool calls carry the same authInfo and run on the same server, and it ends when that auth expires. */
-  function link(extra: any, server: object | undefined = latest) {
+   *  its tool calls carry the same authInfo and run on `server` (the attached McpServer handling this request), and it ends when that auth expires. */
+  function link(extra: Extra, server: object) {
     const call = server && calls.get(server);
-    if (!site || !call) throw new Error("ui.link needs defineUi({ web: { origin } }) and an attached server.");
+    if (!site || !call) throw new Error("ui.link(extra, server) needs defineUi({ web: { origin } }) and the attached server.");
     // A browser session must not mint links: it could renew itself for ever, and prompt the user's host at will.
     if (extra?.[FROM_WEB]) throw new Error("Not available from the web UI.");
     const authInfo = extra?.authInfo;
@@ -148,10 +189,10 @@ export function defineUi(o: UiOptions) {
   }
 
   /** From inside a tool handler: ask the host to open the web UI for this user (URL elicitation), or get a link to show.
-   *  Pass { server } (your McpServer) to enable elicitation. */
-  async function openInBrowser(extra: any, opts: { message?: string; server?: ServerLike } = {}) {
-    const url = link(extra, opts.server);
-    const s = opts.server?.server;
+   *  `server` is the attached McpServer handling this request. */
+  async function openInBrowser(extra: Extra, opts: { message?: string; server: ServerLike }) {
+    const url = link(extra, opts?.server);
+    const s = opts.server.server;
     if (s?.getClientCapabilities?.()?.elicitation?.url) {
       const r = await s.elicitInput({ mode: "url", message: opts.message ?? `Open ${o.name} in your browser`, url, elicitationId: crypto.randomUUID() },
         { relatedRequestId: extra?.requestId });
@@ -174,6 +215,8 @@ export function defineUi(o: UiOptions) {
     site,
     link,
     openInBrowser,
+    /** The user id for an MCP request, as the view receives it. Use it in tool handlers so tools and view agree on who is asking. */
+    identify,
     uri,
     shell,
   };

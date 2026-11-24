@@ -55,7 +55,8 @@
      "text": "Created note #1: Hello"
     }
    ],
-   "structuredContent": null
+   "structuredContent": null,
+   "isError": false
   },
   {
    "name": "pin_note",
@@ -65,7 +66,8 @@
      "text": "#1 pinned=true"
     }
    ],
-   "structuredContent": null
+   "structuredContent": null,
+   "isError": false
   },
   {
    "name": "list_notes",
@@ -75,7 +77,30 @@
      "text": "#1 (pinned) Hello"
     }
    ],
-   "structuredContent": null
+   "structuredContent": null,
+   "isError": false
+  },
+  {
+   "name": "pin_note",
+   "content": [
+    {
+     "type": "text",
+     "text": "Not found"
+    }
+   ],
+   "structuredContent": null,
+   "isError": false
+  },
+  {
+   "name": "add_note",
+   "content": [
+    {
+     "type": "text",
+     "text": "MCP error -32602: Input validation error: Invalid arguments for tool add_note: Invalid input: expected string, received number at title\nInvalid input: expected string, received undefined at body"
+    }
+   ],
+   "structuredContent": null,
+   "isError": true
   }
  ]
 }

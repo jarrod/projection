@@ -5,6 +5,7 @@ import { brotliCompress, gzip, constants as zc } from "node:zlib";
 import { promisify } from "node:util";
 const br = promisify(brotliCompress), gz = promisify(gzip);
 import type { SyncState, SyncResult } from "./ui.js";
+import { esc } from "./html.js";
 
 export type WebOptions = {
   /** Public origin, e.g. "https://app.example.com" or "http://localhost:3000". */
@@ -19,7 +20,8 @@ export type WebOptions = {
 type Deps = { name: string; css: string; runtime: string; sync: (user: string, s?: SyncState, waitMs?: number, signal?: AbortSignal) => Promise<SyncResult> };
 const MAX_BODY = 1_000_000; // bytes the Node adapter will buffer for one request
 type Call = (name: string, args: unknown) => Promise<any>;
-type Grant = { user: string; call: Call; exp: number; until: number };
+type Grant = { user: string; call: Call; exp: number; until: number; polls?: Set<AbortController> };
+const MAX_POLLS = 8; // held syncs per browser session: enough for a tab each, and a bound on what one session can make the server render
 
 const id = () => randomBytes(24).toString("base64url");
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -30,7 +32,7 @@ export function createWeb(d: Deps, opts: WebOptions) {
   const secure = opts.origin.startsWith("https:");
   const links = new Map<string, Grant>();     // sha256(token) → grant (tokens are never stored)
   const sessions = new Map<string, Grant>();  // sha256(sid) → grant
-  const assetTag = hash(d.css + d.runtime).slice(0, 10);
+  const assetTag = hash(d.css + d.runtime).slice(0, 10), name = esc(d.name);
   const sweep = setInterval(() => { const n = Date.now(); for (const m of [links, sessions]) for (const [k, g] of m) if (g.exp < n) m.delete(k); }, 60_000);
   (sweep as any).unref?.();
 
@@ -42,12 +44,14 @@ export function createWeb(d: Deps, opts: WebOptions) {
   const page = (title: string, body: string, status = 200) =>
     res(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><link rel="stylesheet" href="${base}/a/${assetTag}.css"></head><body>${body}</body></html>`, status, { "Content-Type": "text/html; charset=utf-8" });
   const json = (o: unknown, status = 200) => res(JSON.stringify(o), status, { "Content-Type": "application/json" });
-  const asset = (body: string, type: string) => new Response(body, { headers: { "Content-Type": type, "Cache-Control": "public, max-age=31536000, immutable" } });
+  const asset = (body: string, type: string) => new Response(body, { headers: { "Content-Type": type, "X-Content-Type-Options": "nosniff", "Cache-Control": "public, max-age=31536000, immutable" } });
 
   const session = (req: Request) => {
-    const m = /(?:^|;\s*)p_s=([\w-]+)/.exec(req.headers.get("cookie") ?? "");
-    const g = m && sessions.get(hash(m[1]));
-    return g && g.exp > Date.now() ? g : undefined;
+    // Every p_s is tried: a stale or planted cookie of the same name must not hide the real one.
+    for (const m of (req.headers.get("cookie") ?? "").matchAll(/(?:^|;\s*)p_s=([\w-]+)/g)) {
+      const g = sessions.get(hash(m[1]));
+      if (g && g.exp > Date.now()) return g;
+    }
   };
 
   const owns = (pathname: string) => pathname === base || pathname.startsWith(base + "/");
@@ -66,12 +70,15 @@ export function createWeb(d: Deps, opts: WebOptions) {
       const k = hash(lm[1]);
       const g = links.get(k);
       if (!g || g.exp < Date.now()) return page("Link expired", `<main class="gate"><h1>This link has expired</h1><p>Ask the assistant for a new one.</p></main>`, 410);
-      if (req.method === "GET") return page(`Open ${d.name}`, `<main class="gate"><h1>Open ${d.name}</h1><p>You were sent a private link. It works once.</p><form method="post"><button class="btn">Continue</button></form></main>`);
+      if (req.method === "GET") return page(`Open ${name}`, `<main class="gate"><h1>Open ${name}</h1><p>You were sent a private link. It works once.</p><form method="post"><button class="btn">Continue</button></form></main>`);
       if (req.method !== "POST") return res(null, 405);
+      // Only our own Continue page may redeem: another site must not sign this browser in to someone else's session.
+      const site = req.headers.get("sec-fetch-site"), from = req.headers.get("origin");
+      if (site ? site !== "same-origin" : from && from !== opts.origin) return res(null, 403);
       links.delete(k);
       const sid = id(), exp = Math.min(Date.now() + sessionTtl, g.until);
       sessions.set(hash(sid), { ...g, exp });
-      return res(null, 303, { Location: `${base}/`, "Set-Cookie": `p_s=${sid}; Path=${base}; HttpOnly; SameSite=Lax; Max-Age=${Math.floor((exp - Date.now()) / 1000)}${secure ? "; Secure" : ""}` });
+      return res(null, 303, { Location: `${base}/`, "Set-Cookie": `p_s=${sid}; Path=${base || "/"}; HttpOnly; SameSite=Lax; Max-Age=${Math.floor((exp - Date.now()) / 1000)}${secure ? "; Secure" : ""}` });
     }
 
     const g = session(req);
@@ -82,19 +89,29 @@ export function createWeb(d: Deps, opts: WebOptions) {
       try { s = await d.sync(g.user); }
       catch { return res(null, 500); }
       const state = JSON.stringify({ v: s.v, h: s.h, base }).replace(/</g, "\\u003c");
-      return page(d.name, `${s.html}<script type="application/json" id="p-state">${state}</script><script src="${base}/a/${assetTag}.js"></script>`);
+      return page(name, `${s.html}<script type="application/json" id="p-state">${state}</script><script src="${base}/a/${assetTag}.js"></script>`);
     }
 
     if (req.method !== "POST") return json({ error: "not found" }, 404);
     if (req.headers.get("P-Req") !== "1") return json({ error: "missing P-Req header" }, 403); // blocks cross-site simple requests
     const body = await req.json().catch(() => ({}));
     try {
-      if (path === "/sync") return json(await d.sync(g.user, body ?? {}, undefined, req.signal));
+      if (path === "/sync") {
+        // Over the limit, the oldest held poll gives way. Each ends with its request.
+        const polls = (g.polls ??= new Set()), poll = new AbortController(), p = body?.params;
+        if (polls.size >= MAX_POLLS) [...polls][0].abort();
+        polls.add(poll);
+        req.signal.addEventListener("abort", () => poll.abort());
+        try {
+          // Same shape the MCP path validates: params is an object or nothing.
+          return json(await d.sync(g.user, { h: body?.h, v: body?.v, params: p && typeof p === "object" && !Array.isArray(p) ? p : {} }, undefined, poll.signal));
+        } finally { polls.delete(poll); }
+      }
       const tm = /^\/tool\/([\w.-]+)$/.exec(path);
-      if (!tm) return json({ error: "not found" }, 404);
+      if (!tm || tm[1] === "p_sync") return json({ error: "not found" }, 404); // sync has its own route, which ends with the request
       const r = await g.call(tm[1], body);
       return r?.isError ? json({ error: r.content?.[0]?.text ?? "tool error" }, 400) : json(r);
-    } catch (e: any) { return json({ error: e.message }, 400); }
+    } catch { return json({ error: "error" }, 500); } // a tool's own error text is returned above; internal failures are not described
   }
 
   return {
@@ -132,7 +149,7 @@ export function createWeb(d: Deps, opts: WebOptions) {
         res.end();
       }
     },
-    /** Mint a single-use link. Use ui.link(extra), which binds it to the MCP request's user, auth and server. */
+    /** Mint a single-use link. Use ui.link(extra, server), which binds it to the MCP request's user, auth and server. */
     link(user: string, call: Call, until?: number) {
       const t = id();
       links.set(hash(t), { user, call, exp: Date.now() + linkTtl, until: until || Infinity });

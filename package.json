@@ -1,9 +1,10 @@
 {
   "name": "mcp-projection",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Bolt a live, styled human UI onto any MCP server. No framework.",
   "scripts": {
     "build": "node build.mjs",
+    "prepack": "npm run build",
     "example": "cd examples/notes-server && npm install && npm run build",
     "test": "npm run build && npm run example && cd tests && npm install && npm run snapshot && npm run unit && npm run host",
     "test:web": "cd tests && npm run web"

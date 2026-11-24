@@ -6,9 +6,9 @@ export const ui = defineUi({
   attachTo: ["list_notes"],
   css: themes.terminal,
   web: { origin: process.env.UI_ORIGIN ?? "http://localhost:3000", tool: "open_notes_in_browser" },
-  view: ({ params }) => {
+  view: ({ user, params }) => {
     const q = String(params.q ?? "").toLowerCase();
-    const notes = store.list().filter((n) => n.title.toLowerCase().includes(q));
+    const notes = store.list(user).filter((n) => n.title.toLowerCase().includes(q));
     const pinned = notes.filter((n) => n.pinned);
     return html`
       <div class="stack" style="--gap:20px;max-width:880px;margin:0 auto">

@@ -34,7 +34,7 @@ export function attrs(o: Record<string, unknown>): Html {
   let out = "";
   for (const k in o) {
     const v = o[k];
-    if (v == null || v === false) continue;
+    if (v == null || v === false || !/^[\w:.-]+$/.test(k)) continue; // a name with a space or quote would start a new attribute
     out += v === true ? ` ${k}` : ` ${k}="${esc(typeof v === "object" ? JSON.stringify(v) : v)}"`;
   }
   return raw(out);

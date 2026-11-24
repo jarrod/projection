@@ -50,7 +50,7 @@ db.alice.push("a2"); ui.write();
 const A2 = await waitA, B2 = await waitB;
 ok(A2.html?.includes("a2") && Date.now() - t0 < 1000, "write() wakes a waiting viewer with new HTML");
 ok(!B2.html && B2.v === A2.v, "bob was woken but his HTML did not change: nothing sent");
-ok((await ui.sync("alice", { ...A2, params: { only: "a2" } })).html.includes("<li>a2</li></ul>"), "params are part of the render");
+ok((await ui.sync("alice", { h: A2.h, params: { only: "a2" } })).html.includes("<li>a2</li></ul>"), "params are part of the render");
 slow = 40; const during = ui.sync("alice", { h: A2.h }); await new Promise((r) => setTimeout(r, 5));
 db.alice.push("a3"); ui.write(); slow = 0;
 const D = await during, after = await ui.sync("alice", D, 5000);
@@ -69,6 +69,8 @@ ok(/cancelled/.test(await held) && Date.now() - t0 < 1000, "a cancelled sync sto
   const http = await import("node:http");
   const w = defineUi({ name: "w", web: { origin: "http://localhost:3911", tool: "open_w" }, view: ({ params }) => { if (params.boom) throw new Error("boom"); return html`<p>hi</p>`; } });
   const ws = w.attach(new McpServer({ name: "w", version: "1" }));
+  ws.registerTool("peek", { description: "read", annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
+  ws.registerTool("poke", { description: "write" }, async () => ({ content: [] }));
   const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
   const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
   const [ca, cb] = InMemoryTransport.createLinkedPair();
@@ -79,6 +81,61 @@ ok(/cancelled/.test(await held) && Date.now() - t0 < 1000, "a cancelled sync sto
   const post = (path, body = "{}") => w.site.fetch(new Request("http://localhost:3911/ui" + path, { method: "POST", headers: { cookie, "P-Req": "1" }, body }));
   const again = await post("/tool/open_w");
   ok(again.status === 400 && !/\/ui\/l\//.test(await again.text()), "a browser session cannot mint itself a new link");
+
+  const link2 = (await c.callTool({ name: "open_w", arguments: {} })).content[0].text.match(/http\S+/)[0];
+  const redeem = (headers) => w.site.fetch(new Request(link2, { method: "POST", headers })).then((r) => r.status);
+  ok(await redeem({ "sec-fetch-site": "cross-site" }) === 403 && await redeem({ origin: "https://evil.example" }) === 403, "another site cannot redeem a link into this browser");
+  ok(await redeem({ "sec-fetch-site": "same-origin", origin: "http://localhost:3911" }) === 303, "the Continue page itself still redeems it");
+
+  ok(w.identify({}) === "local" && w.identify({ authInfo: { clientId: "app", extra: { sub: "u1" } } }) === "u1", "identity: no auth is local, otherwise the token's subject");
+  ok(/extra\.sub/.test(await err(() => w.identify({ authInfo: { clientId: "app" } }))), "identity: an authenticated request with no subject is refused, not mapped to the client id");
+  ok(/attached server/.test(await err(() => w.link({}))) && /attached server/.test(await err(() => w.openInBrowser({}))), "ui.link and ui.openInBrowser need the server the request belongs to");
+  const anon = defineUi({ name: "a", identify: () => undefined, view: () => html`x` });
+  ok(/No user id/.test(await err(() => anon.identify({}))), "identity: an identify() that returns nothing is refused, not mapped to a shared user");
+  ok(/must return html/.test(await err(() => defineUi({ name: "v", view: () => ({ __html: "<script>" }) }).render())), "a view that returns a hand-built { __html } object is refused");
+  ok(/<\/style/.test(await err(() => defineUi({ name: "c", css: "</style><script>", view: () => html`x` }))), "css that would close the style element is refused");
+  const { attrs, Menu } = await import(`${NS}/node_modules/mcp-projection/dist/index.js`);
+  ok(attrs({ "x onmouseover=alert(1) y": "1", ok: "1" }).__html === ' ok="1"', "attrs drops a name that would start a second attribute");
+  ok(!/javascript:/.test(Menu({ id: "m", items: [{ label: "x", href: "javascript:alert(1)" }, { label: "y", href: "https://example.com" }] }).__html), "Menu drops a javascript: href");
+
+  // one render is shared by viewers asking for the same thing; a burst of writes wakes them once
+  let runs = 0;
+  const many = defineUi({ name: "m", view: async ({ params }) => { runs++; await new Promise((r) => setTimeout(r, 5)); return html`<p>${runs}${params.k}</p>`; } });
+  const first = await many.sync("u"); runs = 0;
+  const held20 = Array.from({ length: 20 }, () => many.sync("u", first, 5000)), other = many.sync("u", { ...first, params: { k: 1 } }, 5000);
+  for (let i = 0; i < 10; i++) many.write();
+  await Promise.all([...held20, other]);
+  ok(runs === 2, `20 viewers of one view plus 1 of another, 10 writes: 2 renders (got ${runs})`);
+
+  const fresh = w.attach(new McpServer({ name: "w2", version: "1" }));
+  fresh.registerTool("peek", { description: "read", annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
+  const [fa, fb] = InMemoryTransport.createLinkedPair();
+  await fresh.connect(fb);
+  const fc = new Client({ name: "agent", version: "1" }); await fc.connect(fa);
+  const f0 = await w.sync("local");
+  let tf = Date.now(), fheld = w.sync("local", f0, 300);
+  await fc.callTool({ name: "peek", arguments: {} }); await fheld;
+  ok(Date.now() - tf >= 250, "readOnlyHint is known from registration: no tools/list needed first");
+  await fc.close();
+
+  const bad = await post("/sync", JSON.stringify({ params: null }));
+  ok(bad.status === 200 && (await post("/sync", JSON.stringify({ params: "x" }))).status === 200, "web sync treats params that are not an object as none");
+  ok((await post("/tool/p_sync")).status === 404, "p_sync is not reachable as a web tool call: sync has its own route");
+  const cur = await w.sync("local");
+  const gate = new AbortController(), polls = Array.from({ length: 9 }, () =>
+    w.site.fetch(new Request("http://localhost:3911/ui/sync", { method: "POST", headers: { cookie, "P-Req": "1" }, body: JSON.stringify(cur), signal: gate.signal })).then((r) => r.status));
+  ok(await Promise.race([polls[0], new Promise((r) => setTimeout(r, 500, "held"))]) === 500, "a ninth held poll on one browser session ends the oldest");
+  gate.abort(); await Promise.allSettled(polls);
+
+
+  await c.listTools();
+  const s0 = await w.sync("local");
+  let t1 = Date.now(), held = w.sync("local", s0, 300);
+  await c.callTool({ name: "peek", arguments: {} }); await held;
+  ok(Date.now() - t1 >= 250, "a readOnlyHint tool call wakes no viewer");
+  t1 = Date.now(); held = w.sync("local", s0, 5000);
+  await c.callTool({ name: "poke", arguments: {} }); await held;
+  ok(Date.now() - t1 < 1000, "any other tool call still does");
 
   let rejected = 0; const onRej = () => rejected++; process.on("unhandledRejection", onRej);
   let downstream = -1;

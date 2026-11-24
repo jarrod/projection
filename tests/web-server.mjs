@@ -38,4 +38,4 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" }); return res.end(JSON.stringify({ ...r, elicitedUrl: lastUrl }));
   }
   ui.site.node(req, res);
-}).listen(3000, () => console.log("ready"));
+}).listen(3000, "127.0.0.1", () => console.log("ready")); // loopback only: /dev and /agent are unauthenticated test routes, never deploy this file

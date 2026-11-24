@@ -1,5 +1,6 @@
 // Minimal MCP Apps (2026-01-26) app-side bridge. Replaces the ~129 KB gz official client for this job.
 import type { Transport } from "./runtime.js";
+declare const __VERSION__: string; // package.json version, set by build.mjs
 
 export type Port = { post(msg: unknown): void; listen(fn: (msg: any) => void): void };
 const windowPort = (): Port => ({
@@ -26,12 +27,11 @@ export async function mcpBridge(port: Port = windowPort()): Promise<Transport> {
   const pending = new Map<number, [(v: any) => void, (e: any) => void]>();
   const post = (m: object) => port.post({ jsonrpc: "2.0", ...m });
   port.listen((m) => {
-    if (m?.jsonrpc !== "2.0") return;
-    if (m.id != null && !m.method) {
+    if (m?.id != null && !m.method) {
       const p = pending.get(m.id); pending.delete(m.id);
       m.error ? p?.[1](new Error(m.error.message)) : p?.[0](m.result);
-    } else if (m.method === "ui/notifications/host-context-changed") applyHost(m.params);
-    else if (m.id != null) post({ id: m.id, result: {} }); // ping, ui/resource-teardown, anything else: ack
+    } else if (m?.method === "ui/notifications/host-context-changed") applyHost(m.params);
+    else if (m?.id != null) post({ id: m.id, result: {} }); // ping, ui/resource-teardown, anything else: ack
   });
   const notify = (method: string, params: unknown = {}) => post({ method, params });
   const request = (method: string, params: unknown, signal?: AbortSignal) =>
@@ -39,10 +39,10 @@ export async function mcpBridge(port: Port = windowPort()): Promise<Transport> {
       const n = ++id;
       pending.set(n, [res, rej]); post({ id: n, method, params });
       // Standard MCP cancellation: the host forwards it and the server stops holding the call.
-      signal?.addEventListener("abort", () => { if (pending.delete(n)) { notify("notifications/cancelled", { requestId: n }); rej(new Error("cancelled")); } });
+      signal?.addEventListener("abort", () => { if (pending.delete(n)) { notify("notifications/cancelled", { requestId: n }); rej(); } }, { once: true });
     });
 
-  const init = await request("ui/initialize", { appInfo: { name: "mcp-projection", version: "0.2.0" }, appCapabilities: {}, protocolVersion: "2026-01-26" });
+  const init = await request("ui/initialize", { appInfo: { name: "mcp-projection", version: __VERSION__ }, appCapabilities: {}, protocolVersion: "2026-01-26" });
   applyHost(init?.hostContext);
   notify("ui/notifications/initialized");
   await new Promise((r) => setTimeout(r, 0));
@@ -50,7 +50,7 @@ export async function mcpBridge(port: Port = windowPort()): Promise<Transport> {
   let last = 0;
   new ResizeObserver(() => {
     const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
-    if (h !== last) notify("ui/notifications/size-changed", { width: Math.ceil(innerWidth), height: (last = h) });
+    if (h !== last) notify("ui/notifications/size-changed", { width: innerWidth, height: (last = h) });
   }).observe(document.body);
 
   return {
