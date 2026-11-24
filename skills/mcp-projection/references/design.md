@@ -14,47 +14,39 @@ The tool list says what the system can do. The UI shows what a person needs to s
 
 | Server has | UI gets |
 |---|---|
-| Read tools (`list_*`, `get_*`, `status`, `search_*`) | Loaders that call the same store functions directly (tools return text for a model; loaders return objects for HTML) |
-| Write tools (`add_*`, `update_*`, `set_*`, `delete_*`, `run_*`) | A `writes` entry for **every** one, so agent calls refresh the UI. A button or form only for those a human should do by hand |
+| Read tools (`list_*`, `get_*`, `status`, `search_*`) | Calls to the same store functions inside `view` (tools return text for a model; the view needs objects) |
+| Write tools (`add_*`, `update_*`, `set_*`, `delete_*`, `run_*`) | Nothing needed for liveness: every tool call refreshes viewers. A button or form only for those a human should do by hand |
 | The tool after which a person wants to look | `attachTo` (usually one: the main list or status tool) |
-| Data changed outside tools (cron, webhooks, workers) | `ui.write(key)` at the point of change |
-| UI state: search text, filters, sort, page, selection | App-only `ui_*` tools plus a per-user `view` key |
-| An agent tool that reports failure with `isError` that a person needs to see | An app-only twin that calls the same core function and throws |
+| Data changed outside tools (cron, webhooks, workers) | `ui.write()` at the point of change |
+| UI state: search text, filters, sort, page, selection | View params, changed with `set`. Nothing on the server |
+| Tools that change nothing | `annotations: { readOnlyHint: true }`, so their calls don't wake viewers |
 
 Never add a model-visible tool or change an agent tool for the UI's sake.
 
-Tools the UI never calls still belong in `writes` if they change data the UI shows. `writes` is both "what refreshes the UI" and "what the UI may call", so a tool that's in `writes` only for refreshing is also callable by the UI. If a write tool must never be run by a human, consider whether the UI should show its data at all, or refresh via `ui.write` from inside the store layer instead.
+Any tool a human can click is a tool the agent can call, and the other way round. The UI calls the tool through the server's own handler, so validation and defaults run. If a tool must never be run by a human, don't put a control for it in the view.
 
-## 3. Data keys
+## 3. The view and its params
 
-- **Collection key** per thing that changes together: `notes`, `tasks`, `runs`. The default.
-- **Item key** for per-item fragments: `task: ({ id }) => store.get(Number(id))`, read as `read("task", id)`. `ui.write("task:7")` refreshes only readers of task 7.
-- **Per-user key**: loaders get `{ user }`. Without authentication everyone is `"local"`.
-- **View key** for UI state set by app-only tools: `view: ({ user }) => views.get(user) ?? defaults`.
+There is one `view`. It receives `{ user, params }` and returns the whole UI.
 
-Loaders run inside the agent's tool call that triggered the write. Keep them fast, and make them unable to throw.
+- **Read the store inside the view.** It runs again after every tool call, so what it reads is current. Keep it fast and make it unable to throw.
+- **Params** are the per-viewer state: search text, filter, sort, page, open item. They live in the browser, are sent with each sync, and reset when the UI is reopened. Treat them as untrusted input: `String(params.q ?? "")`, clamp numbers, check against an allowed list.
+- **User** is the MCP user (`authInfo.extra.sub`, or `"local"` without auth). Filter the data by it when the data is per user.
+- Split the view into plain functions that return `html`: `Overview(items)`, `List(items)`. They are not registered anywhere.
+- Viewers with the same user and params share one render, so a view that is expensive for one is not expensive for many.
 
-## 4. Fragments
-
-Rules:
-
-1. **Root fragment reads nothing.** It holds layout, dialogs and `frag()` calls, so it never re-renders.
-2. **Leaves read only what they show**, one leaf per region that changes independently.
-3. A fragment re-renders **with all its children** and sends its whole HTML. Keep heavy regions in their own leaf.
-4. **No fragment boundary inside `<table>`, `<tbody>`, `<tr>` or `<select>`.** Use a whole-table fragment, or a list/grid for per-item fragments.
-5. **Never mount the same fragment with the same params twice** on one page.
-6. Use params for variants: `frag("list", { filter: "pinned" })`.
-
-Typical tree:
+Typical shape:
 
 ```
-app                 reads nothing: Header, Dialogs, layout
-├── stats           reads tasks
-├── list            reads tasks, view
-└── activity        reads events
+view
+├── Header, ThemeToggle?            layout
+├── Overview(items)                 Stat grid
+├── List(items, params)             filtered by params, one table
+├── Activity(events)                recent history
+└── Dialogs                         create, confirm delete (outside the table)
 ```
 
-## 5. Layout patterns
+## 4. Layout patterns
 
 Pick one or two per screen. Code for each is in recipes.md.
 
@@ -64,14 +56,14 @@ Pick one or two per screen. Code for each is in recipes.md.
 | **Collection** | The main list the agent manages | `Card({ title, flush: true })` around `Table({ id, rowKey, empty })`; status as `Badge`; row actions as ghost, small, icon-only buttons with `label` |
 | **Queue** | Items waiting for a human | A filtered table with Reject (secondary) and Approve (primary) per row; pending count in the card description |
 | **Activity feed** | What the agent just did | `<ul>` of `<li id>` with `Mono` timestamps; newest first; capped (for example 20) |
-| **Run monitor** | Long jobs | Table with `Badge` state, mono progress column, `Dot({ pulse: true })` while running; a worker calls `ui.write("runs")`; row `Menu` for cancel |
-| **Detail** | One item's full content | Per-row `Dialog`, or an item-key fragment |
+| **Run monitor** | Long jobs | Table with `Badge` state, mono progress column, `Dot({ pulse: true })` while running; a worker calls `ui.write()`; row `Menu` for cancel |
+| **Detail** | One item's full content | Per-row `Dialog`, or an `id` param that swaps the list for a detail view with a Back button |
 | **Settings** | A few values the agent reads | `Card` with `Checkbox({ switch: true, tool })` and `Select({ tool })` in a `Grid` |
-| **Views of one dataset** | All / Pinned / Mine | `Tabs` whose panels are `frag("list", { filter })` |
+| **Views of one dataset** | All / Pinned / Mine | `Tabs` with one panel each, or a filter param with `Select` |
 
-Screen order: header → what needs the person (queue) → status (overview, runs) → the full collection → history and settings.
+Screen order: header, what needs the person (queue), status (overview, runs), the full collection, history and settings.
 
-## 6. Visual rules
+## 5. Visual rules
 
 The kit is hairline, monochrome and dense. Stay inside it.
 
@@ -82,19 +74,19 @@ The kit is hairline, monochrome and dense. Stay inside it.
 - **Numbers and ids** in `Mono` or `mono: true` columns, right-aligned when they're quantities.
 - **Empty states say how to fill them**: "No tasks yet. Ask your assistant to add one."
 - **Say it's live** where people might doubt it: `Dot({ tone: "ok", pulse: true, label: "Live" })` + "Shared with your assistant".
-- **Constrain width**: wrap the root in `<div class="stack" style="--gap:20px;max-width:960px;margin:0 auto">`.
+- **Constrain width**: wrap the view in `<div class="stack" style="--gap:20px;max-width:960px;margin:0 auto">`.
 - **Work at 420 px.** Hosts often show the UI in a narrow column. `Grid` and `Row` wrap; tables scroll. Keep at most four or five table columns; fold secondary fields under the title with `Stack({ gap: 2 }, title, Muted(sub))`.
 - **Sentence case, short labels.** Button labels are verbs ("Approve", "New task").
 - **Confirm destructive actions** with a dialog that names the item and says the agent will see the change.
 
-## 7. Accessibility
+## 6. Accessibility
 
 - Icon-only buttons and dots need `label`.
 - Use real controls (`Button`, `Select`, `Checkbox`), not clickable `div`s.
 - Dialogs have a title; forms have labels (`Input({ label })`) or a placeholder only for single search fields.
 - Don't convey state by colour alone: `Badge` text says the state.
 
-## 8. Review the result
+## 7. Review the result
 
 After previewing, check:
 

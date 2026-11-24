@@ -1,17 +1,16 @@
 ---
 name: mcp-projection
-description: Add a live, server-rendered UI for humans to an existing TypeScript MCP server with the mcp-projection library, without changing the tools, schemas or results the model sees. Covers checking fit, installing the library, deciding what the UI should show, writing ui.ts (fragments, components, writes), attaching it to McpServer, optional web mode, and testing, previewing and proving the agent surface is unchanged. Use when someone wants a UI, dashboard, admin panel, live view or MCP App for an MCP server, mentions mcp-projection, projection, defineUi or ui.attach, or wants people to watch and act on what an agent does through MCP tools.
+description: Add a live, server-rendered UI for humans to an existing TypeScript MCP server with the mcp-projection library, without changing the tools, schemas or results the model sees. Covers checking fit, installing the library, deciding what the UI should show, writing ui.ts (one view function and components), attaching it to McpServer, optional web mode, and testing, previewing and proving the agent surface is unchanged. Use when someone wants a UI, dashboard, admin panel, live view or MCP App for an MCP server, mentions mcp-projection, projection, defineUi or ui.attach, or wants people to watch and act on what an agent does through MCP tools.
 ---
-
-> **Out of date.** This describes the 0.2 API (fragments, `writes`, `p_mount` / `p_call`). Version 0.3 replaced it with one `view` function and one sync tool, so the code here will not run as written. Until this is rewritten, use [AGENTS.md](../../AGENTS.md).
 
 # Add a UI to an MCP server with mcp-projection
 
 `mcp-projection` adds a second view of an MCP server for the people working with the agent. It shows up inside MCP Apps hosts (Claude, ChatGPT, VS Code) and, optionally, on a normal URL. The model's view of the server doesn't change.
 
-- **UI = f(data).** Fragments are server functions that `read()` data and return HTML. Nothing renders in the browser.
-- **Actions are the existing tools.** `Button({ tool: "pin_note", args: { id } })` runs the same handler the agent runs.
-- **Live updates come from writes.** `writes: { add_note: ["notes"] }` means after any call to `add_note`, from the agent or a human, every open fragment that read `notes` re-renders and is pushed to every screen.
+- **UI = f(user, params).** One `view` function on the server returns HTML. Nothing renders in the browser.
+- **Actions are the existing tools.** `Button({ tool: "pin_note", args: { id } })` makes the same `tools/call` the agent makes: same validation, same handler.
+- **Live by default.** After every tool call, from the agent or a human, open UIs render again and receive the HTML if it changed. Nothing to declare.
+- **View state is params.** Search text, the open row, the page: a small object kept in the viewer's browser and sent with each render. Change it with `set`.
 
 `<skill-dir>` below means the folder that contains this file.
 
@@ -20,14 +19,14 @@ description: Add a live, server-rendered UI for humans to an existing TypeScript
 All of these must hold. If one fails, stop and tell the user what would have to change.
 
 - Node 20+, TypeScript or JavaScript, ES modules.
-- The server uses `McpServer` from `@modelcontextprotocol/sdk` (1.20+) with zod (3.25+ or 4).
-- Not a low-level `Server` with its own `tools/call` handler, and not Python or another runtime.
-- One server process (state is in memory; several replicas behind a load balancer won't share updates).
+- The server uses `McpServer` from `@modelcontextprotocol/sdk` (1.20+) with zod (3.25+ or 4). A low-level `Server` or another runtime does not work.
+- One long-lived server process. Viewers wait on an in-memory counter, so several replicas lag (up to 25 s) and serverless or edge runtimes are not supported.
 
-Two things are fixable and common:
+One thing is fixable and common:
 
-- **`server.tool(...)` registrations are invisible to projection.** They don't go through `registerTool`. Any tool the UI will call, list in `writes` or `attachTo` must be converted to `server.registerTool(name, { description, inputSchema, annotations }, handler)`. That form lists identically; the snapshot in step 2 proves it.
 - **No server factory.** Tests need `export function createServer()` that builds the server, registers tools and returns it, with `connect(transport)` left in the entry file. Make that move if the server is built at module top level. Change nothing else.
+
+Tools registered with `server.tool(...)` are fine: attach captures every `tools/call`, whatever the registration style.
 
 ## 2. Workflow
 
@@ -51,10 +50,10 @@ Find, and note down:
 
 - `package.json`: SDK and zod versions, module type, build command, the command that starts the server (for example `node dist/index.js` or `npx tsx src/index.ts`), and the package manager (lockfile).
 - Where `new McpServer(` is constructed, whether a factory exists, and whether a new server is created per session or request.
-- Every tool registration: name, `registerTool` or `.tool(`, its arguments, whether it reads or changes data, and which store or database functions it calls.
-- The data layer the tools use (store module, ORM, API client). Loaders will call it directly.
+- Every tool registration: name, its arguments, whether it reads or changes data, whether it has `annotations.readOnlyHint`, and which store or database functions it calls.
+- The data layer the tools use (store module, ORM, API client). The view will call it directly.
 - The transport (stdio, Streamable HTTP) and the entry file.
-- Whether requests carry authentication (`authInfo`). Without it every viewer is the same user, `"local"`.
+- Whether requests carry authentication (`authInfo`). Without it every viewer is the same user, `"local"`. With it, `authInfo.extra.sub` must be set.
 - Anything that changes data outside tools: cron jobs, webhooks, queues, background workers.
 
 ```bash
@@ -90,10 +89,10 @@ git clone --depth 1 https://github.com/jarrod/projection /tmp/projection && cd /
 ```
 
 ```bash
-npm install /tmp/projection/mcp-projection-0.2.0.tgz
+npm install /tmp/projection/mcp-projection-0.3.0.tgz
 ```
 
-The installed package includes `AGENTS.md` and the full guide at `docs/guide.md`.
+The installed package includes `AGENTS.md`, the full guide at `docs/guide.md` and this skill.
 
 ### Step 4: Design the UI
 
@@ -102,13 +101,11 @@ Read [references/design.md](references/design.md). Then write a plan in this sha
 ```
 Who and when:      <who opens it, and the moment the agent shows it>
 At a glance:       <what they must understand in five seconds>
-Data keys:         <key → loader (store function)>
-Fragments:         app (reads nothing) → <leaf: keys it reads>, ...
-Actions:           <element → tool → args>, ...
-writes:            <tool → keys>, for every tool that changes data
+View:              <sections, each as a plain function, and the data each reads>
+Params:            <name -> what it controls: search, selection, page, tab>
+Actions:           <element -> tool -> args>, ...
 attachTo:          <the read tool after which a person wants to look>
-App-only tools:    <ui_* tools for search, filters, paging, selection>
-Outside writes:    <where ui.write(key) goes for cron/webhooks/workers>
+Outside writes:    <where ui.write() goes for cron/webhooks/workers>
 ```
 
 If the request was open-ended ("add a UI") or the server has more than about eight tools, show the plan to the user and ask before building. If they gave a clear spec, carry on.
@@ -126,16 +123,13 @@ import { ui } from "./ui.js";
 const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));   // BEFORE any registerTool
 ```
 
-- Call `ui.attach` on every server instance (per-session servers are fine), before the first `registerTool`.
-- Convert `server.tool(...)` to `registerTool` for tools the UI uses (step 1).
-- Register app-only `ui_*` tools after the existing ones, with `_meta: { ui: { visibility: ["app"] } }`.
-- Add `ui.write("key")` where data changes outside tools.
+- Call `ui.attach` once per server instance (per-session servers are fine), before the first tool is registered. It throws otherwise.
+- In tool handlers, scope data with `ui.identify(extra)` so tools and view agree on who the user is.
+- Add `ui.write()` where data changes outside tools. Annotate tools that change nothing with `readOnlyHint: true`: their calls don't wake viewers.
 
 ### Step 7: Build and test
 
-Write a test from [assets/ui.test.mjs](assets/ui.test.mjs). Follow the project's test setup if it has one; otherwise add a plain Node script and run it after building. It must cover: the UI mounts, an agent call shows up live, a human action works, and the model's tool list has no `p_*` or `ui_*` tools.
-
-Treat every `[mcp-projection]` warning printed during the test as a failure and fix it.
+Write a test from [assets/ui.test.mjs](assets/ui.test.mjs). Follow the project's test setup if it has one; otherwise add a plain Node script and run it after building. It must cover: the UI mounts, an agent call shows up live, a human action works, and the sync tool is not model-visible.
 
 ### Step 8: Preview and look at it
 
@@ -164,30 +158,31 @@ Only if the user wants the UI on a URL. See "Web mode" in [references/api.md](re
 Tell the user:
 
 - which files changed, and that existing tools are untouched (with the snapshot result);
-- how to see the UI: in a host, by asking the agent to call the `attachTo` tool; on the web, through the `web.tool` or `ui.site.link(user)`;
-- what was tested and what wasn't (projection hasn't been tried in every host);
+- how to see the UI: in a host, by asking the agent to call the `attachTo` tool; on the web, through the `web.tool`;
+- what was tested and what wasn't (projection hasn't been tried in a real host yet);
 - limits that apply: one process, and identity is `"local"` without authentication.
 
 ## 3. Hard rules
 
-1. **Never change an existing tool's name, description, schema, annotations or results.** The allowed edits are wrapping construction in `ui.attach(...)`, converting `server.tool()` to an identical `registerTool`, extracting a factory, and adding `ui.write(...)` calls.
-2. **`ui.attach(server)` comes before every `registerTool`.**
-3. **Every `tool:` used in the UI is in `writes`.** `writes` is also an allow-list, so list only tools a human should run.
-4. **UI-only tools are app-only**: `_meta: { ui: { visibility: ["app"] } }`. Don't add model-visible tools for UI needs, other than an explicit `web.tool`.
-5. **No client JavaScript.** No `<script>` in fragments; use `Tabs`, `Dialog`, `Menu`, `<details>` and server tools instead.
+1. **Never change an existing tool's name, description, schema, annotations or results.** The allowed edits are wrapping construction in `ui.attach(...)`, extracting a factory, and adding `ui.write()` calls.
+2. **`ui.attach(server)` comes before every tool registration.**
+3. **The view returns an `html` template.** Anything else throws.
+4. **Don't add model-visible tools for UI needs**, other than an explicit `web.tool`. View state goes in params, not in tools.
+5. **No client JavaScript.** No `<script>` in the view; use `Tabs`, `Dialog`, `Menu`, `<details>`, `set` and server tools instead.
 6. **Escape by default.** Values go through `html`; use `raw()` only for HTML you produced.
 7. **Stable, page-unique ids on everything that repeats.** `Table` needs `id` and `rowKey`.
-8. **Fragments and loaders never throw.** A throw during a write turns the agent's successful tool call into an error.
+8. **Read params defensively.** They are untrusted: `String(params.q ?? "")`.
+9. **Scope data by `user`.** Never share one user's data with another.
 
 ## 4. Gotchas that cause most bugs
 
-- **UI calls skip zod.** Projection calls the handler directly with the browser's arguments: no coercion, no `.default()`, no validation. Send numbers and booleans in `args` (JSON keeps types). Form fields arrive as strings. Supply defaults from the UI.
-- **A returned `isError` looks like success in the UI.** Only a thrown error shows (`p-error`). If the user should see a failure, add an app-only twin tool that calls the same core function and throws (recipe in recipes.md). Don't change the agent's tool.
-- **Tools with no `inputSchema` get the UI's args object in place of `extra`.** If such a handler uses `extra`, don't call it from the UI: add an app-only tool that does the same work. Adding a schema to the existing tool would change what the model sees.
-- **No fragment boundary inside `<table>` or `<select>`.** The HTML parser moves it. Per-item fragments go in a list or grid.
-- **Don't mount the same fragment with the same params twice on one page.** They share a DOM id.
+- **Form fields arrive as strings.** The UI call goes through the server's own `tools/call` handler, so zod coercion and defaults run. A text field is a string and a checkbox is a boolean. For a number use `z.coerce.number()` in the schema, or pass it in `args`.
+- **A returned `isError` shows as `p-error`.** The message appears on the control. No twin tool is needed.
+- **The view runs after every tool call, for every watched (user, params).** Keep it fast and small. Page large tables (about 200 rows).
+- **The view must not throw.** Catch inside if the data layer can fail.
+- **Data changed outside a tool call needs `ui.write()`.**
 - **`` ${n && html`...`} `` prints `0` when `n` is 0.** Use `n > 0 &&`.
-- **Web mode calls get a minimal `extra`**: `{ authInfo: { extra: { sub } }, ui: "web" }`.
+- **Web mode tool calls can't send notifications or requests, and can't mint links.**
 - **End tests with `process.exit()`.** A pending long-poll keeps Node alive for up to 25 s.
 
 Symptoms and fixes: [references/troubleshooting.md](references/troubleshooting.md).
@@ -198,8 +193,8 @@ Symptoms and fixes: [references/troubleshooting.md](references/troubleshooting.m
 |---|---|
 | [references/design.md](references/design.md) | Step 4: turning a tool list into a screen, layout patterns, visual rules |
 | [references/api.md](references/api.md) | Steps 5, 6, 10: every option, component prop, attribute, token and test API |
-| [references/recipes.md](references/recipes.md) | Step 5: tested code for search, confirm dialogs, approvals, run monitors, settings, paging, outside writes, web deployments |
-| [references/troubleshooting.md](references/troubleshooting.md) | A warning, an error, or the UI doesn't do what you expect |
+| [references/recipes.md](references/recipes.md) | Step 5: tested code for search, confirm dialogs, approvals, settings, paging, outside writes, web deployments |
+| [references/troubleshooting.md](references/troubleshooting.md) | An error, or the UI doesn't do what you expect |
 | [assets/ui.template.ts](assets/ui.template.ts) | Starting `src/ui.ts` |
 | [assets/ui.test.mjs](assets/ui.test.mjs) | Writing the test |
 | [assets/preview.mjs](assets/preview.mjs) | Rendering previews with seeded data |

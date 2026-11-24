@@ -127,5 +127,7 @@ Snapshot HTML: `await ui.render({ q: "x" }, "u1")`.
 - Light and dark: the host's theme (`data-theme`) wins, then `ThemeToggle()`, then the OS. Keep your own colours as `light-dark()` pairs so both modes work.
 - `bare: true` drops the tokens and the kit. `css: TOKENS + myKit` keeps the tokens and replaces the components.
 
+Full guide: `docs/guide.md`. Agent skill for the whole integration: `skills/mcp-projection/SKILL.md`.
+
 ## Not included (by design)
 Client state stores, client routing, JSX, a build step, per-fragment updates, its own sign-in. The whole view renders on each change and only the HTML that differs reaches the DOM.

@@ -24,7 +24,9 @@
     "dist",
     "bin",
     "AGENTS.md",
-    "README.md"
+    "README.md",
+    "skills",
+    "docs/guide.md"
   ],
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",

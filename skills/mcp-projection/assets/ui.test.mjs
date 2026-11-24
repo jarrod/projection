@@ -2,7 +2,7 @@
 //   node test/ui.test.mjs        (after building)
 // Fill in the CONFIG block. Keep the checks; add more for each action the UI offers.
 import { testUi } from "mcp-projection/testing";
-import { createServer } from "../dist/server.js"; // TODO: path to the built factory
+import { createServer } from "../dist/server.js"; // TODO: path to the built factory (a function that returns a fresh server)
 
 const CONFIG = {
   // An agent call that changes data, and text that should then appear in the UI.
@@ -11,22 +11,21 @@ const CONFIG = {
   // A human action: a tool the UI calls, its args (as the UI would send them), and text expected afterwards.
   click: { tool: "complete_item", args: { id: 1 } },                               // TODO
   clickShows: "Done",                                                              // TODO
+  // Optional: a view param (as a `set` control sends it) and text that should then be shown.
+  // set: { params: { q: "agent" }, shows: "Written by the agent" },
 };
 
 let failures = 0;
 const check = (cond, msg) => { console.log(cond ? "PASS" : "FAIL", msg); if (!cond) failures++; };
-const warnings = [];
-const origWarn = console.warn;
-console.warn = (...a) => { const m = a.join(" "); if (m.includes("[mcp-projection]")) warnings.push(m); origWarn(...a); };
 
 const t = await testUi(createServer);
 try {
-  const hidden = t.modelTools.filter((x) => /^(p_|ui_)/.test(x.name)).map((x) => x.name);
-  check(hidden.length === 0, `UI helper tools are hidden from the model ${hidden.join(", ")}`);
+  const hidden = t.modelTools.filter((x) => x.name === "p_sync").map((x) => x.name);
+  check(hidden.length === 0, "the sync tool is hidden from the model");
   check(!!t.resourceUri, `an attachTo tool points at the UI resource (${t.resourceUri})`);
 
   const view = await t.mount();
-  check(view.html().includes("<p-f"), "the UI mounts");
+  check(view.html().includes('id="p-root"'), "the UI mounts");
 
   await t.agent.callTool(CONFIG.agentWrite);
   await view.until((text) => text.includes(CONFIG.agentWriteShows));
@@ -37,7 +36,11 @@ try {
   await view.until((text) => text.includes(CONFIG.clickShows));
   check(true, "a human action works and updates the UI");
 
-  check(warnings.length === 0, `no mcp-projection warnings ${warnings.join(" | ")}`);
+  if (CONFIG.set) {
+    await view.set(CONFIG.set.params);
+    await view.until((text) => text.includes(CONFIG.set.shows));
+    check(true, "a view param changes what is shown");
+  }
   view.close();
 } catch (e) {
   failures++;

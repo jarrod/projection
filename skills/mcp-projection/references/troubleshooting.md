@@ -6,12 +6,12 @@ Find the symptom, check the cause, apply the fix. Confirm each fix with the test
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Warning: `writes lists "t" but no tool "t" was registered after ui.attach()` | Tool registered before `ui.attach`, registered with `server.tool()`, or misspelled | Wrap construction: `ui.attach(new McpServer(...))` before any `registerTool`; convert `server.tool()` to `registerTool` with the same description, schema and annotations |
-| Agent calls don't update the UI | Same as above, or the tool isn't in `writes`, or it writes a key the fragment doesn't read | Add `tool: [keys]`; check the fragment calls `read(key)` for that key |
+| `ui.attach(server) must be called before any tool is registered on the server.` | A tool was registered before `attach` | Wrap construction: `ui.attach(new McpServer(...))`, then register tools |
 | `ui.attach() was already called for this server.` | `attach` called twice on one instance | Once per server instance; call it where the instance is created |
-| `Tool p_mount is already registered` | Two `defineUi` UIs attached to one server | One `ui` per server; put both screens in one UI (tabs, separate fragments) |
-| `Tool <x> is already registered` for a `ui_*` tool | App-only tool registered twice (for example in a per-session factory and at module level) | Register it in the factory only |
+| `This @modelcontextprotocol/sdk version is not supported: tools/call handler not recognised.` | The SDK is older than 1.20 or changed its internals | Upgrade the SDK |
+| `Tool p_sync is already registered` | Two `defineUi` UIs attached to one server | One `ui` per server; put both screens in one view (tabs, a param) |
 | No UI appears in the host | Tool isn't in `attachTo`, or the host doesn't support MCP Apps | Add the tool to `attachTo`; check `t.resourceUri` in a test; try web mode |
+| Agent calls don't update the UI | The tool is annotated `readOnlyHint: true`, or the data changed outside a tool | Drop the annotation if it writes; call `ui.write()` for changes outside tools |
 | The snapshot comparison fails | An existing tool's config changed | Undo the change. `_meta.ui.resourceUri` is expected and ignored; anything else isn't |
 | `mcp-projection` imports fail after install | `dist/` wasn't built | See SKILL.md step 3: build a tarball and install it |
 
@@ -19,35 +19,30 @@ Find the symptom, check the cause, apply the fix. Confirm each fix with the test
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Click shows `UI may not call "t". Add it to defineUi({ writes }).` | Tool isn't in `writes` | Add it, with the keys it changes |
-| Dev warning: `uses hx-tool="t", but "t" is not in defineUi({ writes })` | Same | Same |
-| Click does nothing and shows no error; handler says "Not found" | The handler got `"7"` where it compared with `7`: UI calls skip zod coercion | Send ids in `args` (numbers stay numbers), not form fields |
-| Handler gets `undefined` for a parameter with `.default()` | UI calls skip zod defaults | Send the value from the UI (`args` or a field) |
-| Bad data stored after a UI call | UI calls skip validation; anyone can send any arguments to a `writes` tool | Validate in the handler, or route the UI through an app-only tool that validates |
-| The action failed but nothing turned red | The tool returned `isError` instead of throwing | App-only twin tool that throws (recipes.md, recipe 6) |
-| A no-argument tool breaks only when clicked | It has no `inputSchema`, so the UI passes args where `extra` was expected | Use an app-only tool for the UI |
-| The click works in a host but not on the web | The handler reads `extra` fields web mode doesn't provide (`sendNotification`, `signal`, `sessionId`, `authInfo.clientId`, a token) | Read identity from `authInfo.extra.sub`; don't offer that action on the web |
-| Search box calls the tool on every key with no pause | `debounce` missing | `Input({ tool, debounce: 250 })` |
-| The form stays filled after submit | `keepValues` set, or the call threw | Remove `keepValues`; check `p-error` |
+| The action failed and the control shows `p-error` | The handler threw, returned `isError`, or zod rejected the input | Read the message in the tool result. Fix the args the control sends |
+| A number arrives as a string | Form fields and `Select` send text | `z.coerce.number()` in the schema, or send the number in `args` |
+| A checkbox arrives as a boolean, the schema expects a string | Checkboxes send `true` or `false` | Match the schema, or map it in the handler |
+| Search box calls the tool on every key | `debounce` missing | `Input({ tool, debounce: 250 })`, or use `set: true` and read the param in the view |
+| The form stays filled after submit | `keepValues` is set, or the call failed | Remove `keepValues`; check `p-error` |
 | The dialog stays open after submit | `close: true` missing on the `Form` | Add it |
+| The click works in a host but not on the web | The handler reads `extra` fields web mode doesn't provide (`sendNotification`, `sendRequest`, a client id) | Read identity with `ui.identify(extra)`; don't offer that action on the web |
+| Bad data stored after a UI call | Validation is only what the schema checks | Tighten the schema. UI calls run the same zod validation as agent calls |
 
 ## Rendering and updates
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Agent tool calls fail with a message from your UI code | A loader or fragment threw during the render pass the write triggered | Make loaders and fragments total; `try`/`catch` and render a fallback (recipe 13) |
-| `No loader for "k"` | `read("k")` without `load.k` | Add the loader or fix the key |
-| `Unknown fragment "x"` | `frag("x")` or `root` names an undefined fragment | Define it, or fix the name |
-| Per-row fragment content appears above the table, or rows lose their cells after an update | Fragment boundary inside `<table>` | Make the table one fragment, or use a list/grid |
-| Only the first of two identical widgets updates | Same fragment mounted twice with the same params | Different params, or render it once |
+| `view must return html`...`.` | The view returned a string, `undefined` or a component's raw output of another type | Return an `html` template. Wrap strings with `html` or `esc` |
+| A viewer sees an error or an old screen, agent calls are fine | The view threw. Only that viewer's sync fails | Make the view total: `try`/`catch` around data reads and render a fallback (recipes.md) |
+| Params are `undefined` or the wrong type | Params are untrusted and start empty | `String(params.q ?? "")`; clamp numbers; check against an allowed list |
+| The page filter resets when the UI reopens | Params live in the browser and reset on reopen | By design. Keep durable state in your store behind a tool |
+| Every row flashes on each change | Repeating elements have no ids | `Table({ id, rowKey })`; an `id` on each `li` or card |
 | Rows in one of two tables never update | Both tables use the same `id`, so row ids collide | Give each table its own `id` |
-| Every row flashes on each change | Repeating elements have no ids | `Table({ id, rowKey })`; `id` on each `li` or card |
-| Everything re-renders on every write | The root fragment reads data | Move `read` calls into leaves |
-| A `0` appears on the page | `` ${n && html`...`} `` with `n === 0` | `${n > 0 && ...}` |
+| A `0` is missing | `0` renders, but `${n && html`...`}` shows it where you wanted nothing | `${n > 0 && html`...`}` |
 | Raw HTML tags show as text | A string of HTML interpolated into `html` (escaped on purpose) | Build it with `html`, or `raw()` if it's trusted |
-| An empty slot or border appears in a card header | `actions: cond && x` passes `false`, which isn't `null` | `actions: cond ? x : undefined` |
-| Tab or toggle state resets on update | Hand-built toggle outside `p-local` | Wrap it in an element with `p-local`, or use `Tabs` |
-| A `<script>` in a fragment never runs | By design: no client JavaScript | Use components, popovers, `<details>` or a server tool |
+| An empty slot or border appears in a card header | `actions: cond && x` passes `false` | `actions: cond ? x : undefined` |
+| A hand-built toggle resets on update | State outside the DOM the runtime keeps | Use `Tabs`, `<details>` with an `id`, or a param with `set` |
+| A `<script>` in the view never runs | By design: no client JavaScript | Use components, `<details>`, params or a tool |
 
 ## Styling
 
@@ -57,13 +52,14 @@ Find the symptom, check the cause, apply the fix. Confirm each fix with the test
 | Images or web fonts missing on the web | CSP allows only same-origin and `data:` images, no external fonts | Inline SVG, `data:` URIs, `Icon` |
 | Layout overflows in a host | Too many table columns or fixed widths | Fold secondary fields under the title; drop columns; check at 420 px |
 | Row action buttons aren't right-aligned | A flex `Row` ignores the column's `align: "right"` | `` html`<div class="row" style="justify-content:flex-end">...</div>` `` |
-| Everything unstyled after `bare: true` | Kit CSS removed, including runtime rules | Add your own CSS, including `p-f { display: contents }` |
+| Everything unstyled after `bare: true` | Tokens and kit CSS removed | Add your own CSS, including `p-f { display: contents }` |
 
 ## Testing
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | Test process hangs for about 25 s at the end | A pending long-poll timer on the server | End with `process.exit()` |
-| `until() timed out` though the data changed | The text also matches somewhere else (an activity feed), or the write isn't wired | Assert on an element id in `view.html()`; check `writes` |
-| State from one test leaks into the next | Store is module-level (shared by both `testUi` servers, as intended) | Reset the store between tests, or use a fresh process |
+| `until() timed out` though the data changed | The text also matches elsewhere (an activity feed), or the change isn't reaching the view | Assert on an element id in `view.html()`; check the tool isn't `readOnlyHint` |
+| `click` throws | The tool returned an error | Read the message. `click` throws on any error result |
+| State from one test leaks into the next | The store is module-level (shared by both servers `testUi` creates, as intended) | Reset the store between tests, or use a fresh process |
 | A narrow screenshot looks cut off on the right | Headless Chrome lays out at least 500 px wide and crops | Screenshot the iframe wrapper from assets/preview.mjs with a 520 px window |
