@@ -16,7 +16,8 @@ export type WebOptions = {
   /** Seconds a browser session lasts (never longer than the MCP auth it came from). Default 3600. */
   sessionTtl?: number;
 };
-type Deps = { name: string; css: string; runtime: string; sync: (user: string, s?: SyncState) => Promise<SyncResult> };
+type Deps = { name: string; css: string; runtime: string; sync: (user: string, s?: SyncState, waitMs?: number, signal?: AbortSignal) => Promise<SyncResult> };
+const MAX_BODY = 1_000_000; // bytes the Node adapter will buffer for one request
 type Call = (name: string, args: unknown) => Promise<any>;
 type Grant = { user: string; call: Call; exp: number; until: number };
 
@@ -49,9 +50,11 @@ export function createWeb(d: Deps, opts: WebOptions) {
     return g && g.exp > Date.now() ? g : undefined;
   };
 
+  const owns = (pathname: string) => pathname === base || pathname.startsWith(base + "/");
+
   async function fetch(req: Request): Promise<Response | null> {
     const url = new URL(req.url);
-    if (url.pathname !== base && !url.pathname.startsWith(base + "/")) return null;
+    if (!owns(url.pathname)) return null;
     const path = url.pathname.slice(base.length) || "/";
 
     if (req.method === "GET" && path === `/a/${assetTag}.css`) return asset(d.css, "text/css");
@@ -75,7 +78,9 @@ export function createWeb(d: Deps, opts: WebOptions) {
     if (!g) return path === "/" ? page("No active session", `<main class="gate"><h1>No active session</h1><p>Ask the assistant to open this for you.</p></main>`, 401) : json({ error: "unauthorized" }, 401);
 
     if (path === "/" && req.method === "GET") {
-      const s = await d.sync(g.user);
+      let s: SyncResult;
+      try { s = await d.sync(g.user); }
+      catch { return res(null, 500); }
       const state = JSON.stringify({ v: s.v, h: s.h, base }).replace(/</g, "\\u003c");
       return page(d.name, `${s.html}<script type="application/json" id="p-state">${state}</script><script src="${base}/a/${assetTag}.js"></script>`);
     }
@@ -84,7 +89,7 @@ export function createWeb(d: Deps, opts: WebOptions) {
     if (req.headers.get("P-Req") !== "1") return json({ error: "missing P-Req header" }, 403); // blocks cross-site simple requests
     const body = await req.json().catch(() => ({}));
     try {
-      if (path === "/sync") return json(await d.sync(g.user, body));
+      if (path === "/sync") return json(await d.sync(g.user, body ?? {}, undefined, req.signal));
       const tm = /^\/tool\/([\w.-]+)$/.exec(path);
       if (!tm) return json({ error: "not found" }, 404);
       const r = await g.call(tm[1], body);
@@ -97,18 +102,35 @@ export function createWeb(d: Deps, opts: WebOptions) {
     /** Node http adapter: http.createServer((req, res) => site.node(req, res, next?)). Compresses with brotli or gzip.
      *  `fetch` leaves compression to the platform (Cloudflare, Deno Deploy and most CDNs do it). */
     async node(req: any, res: any, next?: () => void) {
-      const chunks: Buffer[] = [];
-      if (req.method !== "GET" && req.method !== "HEAD") for await (const c of req) chunks.push(c);
-      const r = await fetch(new Request(new URL(req.url, opts.origin), {
-        method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined,
-      }));
-      if (!r) return next ? next() : (res.statusCode = 404, res.end());
-      const h = Object.fromEntries(r.headers), ae = String(req.headers["accept-encoding"] ?? "");
-      let body: Buffer = Buffer.from(await r.arrayBuffer());
-      const enc = body.length < 1024 ? "" : /\bbr\b/.test(ae) ? "br" : /\bgzip\b/.test(ae) ? "gzip" : "";
-      if (enc) { body = await (enc === "br" ? br(body, { params: { [zc.BROTLI_PARAM_QUALITY]: 5 } }) : gz(body)); h["content-encoding"] = enc; h.vary = "Accept-Encoding"; }
-      res.writeHead(r.status, h);
-      res.end(body);
+      // Requests outside the mount path are passed on untouched: their body is not read here.
+      let pathname = "";
+      try { pathname = new URL(req.url, opts.origin).pathname; } catch {}
+      if (!owns(pathname)) return next ? next() : (res.statusCode = 404, res.end());
+      try {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        if (req.method !== "GET" && req.method !== "HEAD") for await (const c of req) {
+          if ((size += c.length) > MAX_BODY) { res.writeHead(413, { Connection: "close" }); return res.end(); }
+          chunks.push(c);
+        }
+        // A viewer that goes away (closed tab, superseded poll) releases its held sync at once.
+        const gone = new AbortController();
+        res.on("close", () => gone.abort());
+        const r = await fetch(new Request(new URL(req.url, opts.origin), {
+          method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined, signal: gone.signal,
+        }));
+        if (!r) return next ? next() : (res.statusCode = 404, res.end());
+        const h = Object.fromEntries(r.headers), ae = String(req.headers["accept-encoding"] ?? "");
+        let body: Buffer = Buffer.from(await r.arrayBuffer());
+        const enc = body.length < 1024 ? "" : /\bbr\b/.test(ae) ? "br" : /\bgzip\b/.test(ae) ? "gzip" : "";
+        if (enc) { body = await (enc === "br" ? br(body, { params: { [zc.BROTLI_PARAM_QUALITY]: 5 } }) : gz(body)); h["content-encoding"] = enc; h.vary = "Accept-Encoding"; }
+        res.writeHead(r.status, h);
+        res.end(body);
+      } catch {
+        // Never let a bad request (unsupported method, malformed header) or a failed render reject: that would end the process.
+        if (!res.headersSent) res.writeHead(500);
+        res.end();
+      }
     },
     /** Mint a single-use link. Use ui.link(extra), which binds it to the MCP request's user, auth and server. */
     link(user: string, call: Call, until?: number) {

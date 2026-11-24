@@ -10,9 +10,11 @@ export const esc = (v: unknown): string => {
   return NEEDS.test(s) ? s.replace(ALL, (c) => ESC[c]) : s;
 };
 
+// The brand is a symbol, which JSON cannot carry: a { "__html": ... } object arriving in params or tool data is escaped like any value.
+const TAG = Symbol.for("mcp-projection.html");
 /** Mark a string as trusted HTML. Never pass user input. */
-export const raw = (s: string): Html => ({ __html: s });
-export const isHtml = (v: unknown): v is Html => typeof v === "object" && v !== null && "__html" in v;
+export const raw = (s: string): Html => ({ __html: s, [TAG]: true }) as Html;
+export const isHtml = (v: unknown): v is Html => typeof v === "object" && v !== null && (v as any)[TAG] === true;
 
 const flat = (v: unknown): string =>
   v == null || v === false || v === true ? "" :
@@ -24,7 +26,7 @@ const flat = (v: unknown): string =>
 export function html(strings: TemplateStringsArray, ...vals: unknown[]): Html {
   let out = strings[0];
   for (let i = 0; i < vals.length; i++) out += flat(vals[i]) + strings[i + 1];
-  return { __html: out };
+  return raw(out);
 }
 
 /** Render attributes: true → bare attr, false/null → omitted, objects → JSON. */
@@ -35,7 +37,7 @@ export function attrs(o: Record<string, unknown>): Html {
     if (v == null || v === false) continue;
     out += v === true ? ` ${k}` : ` ${k}="${esc(typeof v === "object" ? JSON.stringify(v) : v)}"`;
   }
-  return { __html: out };
+  return raw(out);
 }
 
 /** Join class names, dropping falsy values. */

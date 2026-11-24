@@ -33,9 +33,14 @@ export async function mcpBridge(port: Port = windowPort()): Promise<Transport> {
     } else if (m.method === "ui/notifications/host-context-changed") applyHost(m.params);
     else if (m.id != null) post({ id: m.id, result: {} }); // ping, ui/resource-teardown, anything else: ack
   });
-  const request = (method: string, params: unknown) =>
-    new Promise<any>((res, rej) => { pending.set(++id, [res, rej]); post({ id, method, params }); });
   const notify = (method: string, params: unknown = {}) => post({ method, params });
+  const request = (method: string, params: unknown, signal?: AbortSignal) =>
+    new Promise<any>((res, rej) => {
+      const n = ++id;
+      pending.set(n, [res, rej]); post({ id: n, method, params });
+      // Standard MCP cancellation: the host forwards it and the server stops holding the call.
+      signal?.addEventListener("abort", () => { if (pending.delete(n)) { notify("notifications/cancelled", { requestId: n }); rej(new Error("cancelled")); } });
+    });
 
   const init = await request("ui/initialize", { appInfo: { name: "mcp-projection", version: "0.2.0" }, appCapabilities: {}, protocolVersion: "2026-01-26" });
   applyHost(init?.hostContext);
@@ -49,8 +54,8 @@ export async function mcpBridge(port: Port = windowPort()): Promise<Transport> {
   }).observe(document.body);
 
   return {
-    call: async (name, args) => {
-      const r = await request("tools/call", { name, arguments: args });
+    call: async (name, args, signal) => {
+      const r = await request("tools/call", { name, arguments: args }, signal);
       if (r?.isError) throw new Error(r.content?.[0]?.text ?? "tool error");
       return r;
     },

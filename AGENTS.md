@@ -36,7 +36,7 @@ const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));  /
 1. Call `ui.attach(server)` **before** registering tools on it (it throws otherwise). Once per server instance is fine (e.g. one server per session).
 2. If data changes outside a tool call (cron, webhook, queue), call `ui.write()`.
 3. Put an `id` on anything that repeats (`Table` takes `id` + `rowKey`). Ids let the morph update rows in place and highlight only what changed.
-4. Escape by default: `html\`` escapes every `${value}`. Use `raw()` only for trusted HTML.
+4. Escape by default: `html\`` escapes every `${value}`. Use `raw()` only for trusted HTML; a hand-built `{ __html }` object is escaped like any other value.
 5. No client JavaScript. For interaction use `tool` (server data), `set` (view params), popovers (`Dialog`, `Menu`), `Tabs` (radio + CSS), native inputs.
 6. Split a big view into plain functions that return `html`. There is nothing to register.
 
@@ -80,7 +80,8 @@ http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or: 
 - GET on a link shows a Continue page; POST redeems it, then sets an HttpOnly, SameSite=Lax, path-scoped cookie. Tokens are stored hashed.
 - `ui.site.revoke(user)` ends a user's links and sessions.
 - `site.node` compresses responses (brotli, else gzip). With `site.fetch`, compression is left to the platform or CDN.
-- Tool handlers called from the web get `extra.authInfo` but cannot send notifications or requests (elicitation, sampling) to a client.
+- `site.node(req, res, next)` passes requests outside the mount path to `next` with the body unread, refuses bodies over 1 MB (413) and answers 500 instead of throwing.
+- Tool handlers called from the web get `extra.authInfo` but cannot send notifications or requests (elicitation, sampling) to a client, and cannot mint links (`ui.link` / `ui.openInBrowser` throw).
 
 ## Testing (no browser)
 ```ts

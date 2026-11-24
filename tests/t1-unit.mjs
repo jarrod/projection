@@ -57,6 +57,42 @@ const D = await during, after = await ui.sync("alice", D, 5000);
 ok(after.html?.includes("a3"), "a write during a render is never lost: the next sync answers at once with it");
 ok(/<li>&lt;b&gt;<\/li>/.test(await defineUi({ name: "e", view: () => html`<li>${"<b>"}</li>` }).render()), "render() escapes values");
 
+ok(/Results for \[object Object\]/.test(await defineUi({ name: "e", view: ({ params }) => html`Results for ${params.q}` }).render({ q: { __html: "<img src=x onerror=alert(1)>" } })),
+  "a JSON { __html } value is escaped, not trusted as HTML");
+t0 = Date.now();
+const gone = new AbortController(), held = err(() => ui.sync("alice", after, 5000, gone.signal));
+gone.abort();
+ok(/cancelled/.test(await held) && Date.now() - t0 < 1000, "a cancelled sync stops waiting and does not render");
+
+// --- web mode: Node adapter and session limits ---
+{
+  const http = await import("node:http");
+  const w = defineUi({ name: "w", web: { origin: "http://localhost:3911", tool: "open_w" }, view: ({ params }) => { if (params.boom) throw new Error("boom"); return html`<p>hi</p>`; } });
+  const ws = w.attach(new McpServer({ name: "w", version: "1" }));
+  const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
+  const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
+  const [ca, cb] = InMemoryTransport.createLinkedPair();
+  await ws.connect(cb);
+  const c = new Client({ name: "agent", version: "1" }); await c.connect(ca);
+  const link = (await c.callTool({ name: "open_w", arguments: {} })).content[0].text.match(/http\S+/)[0];
+  const cookie = (await w.site.fetch(new Request(link, { method: "POST" }))).headers.get("set-cookie").split(";")[0];
+  const post = (path, body = "{}") => w.site.fetch(new Request("http://localhost:3911/ui" + path, { method: "POST", headers: { cookie, "P-Req": "1" }, body }));
+  const again = await post("/tool/open_w");
+  ok(again.status === 400 && !/\/ui\/l\//.test(await again.text()), "a browser session cannot mint itself a new link");
+
+  let rejected = 0; const onRej = () => rejected++; process.on("unhandledRejection", onRej);
+  let downstream = -1;
+  const srv = http.createServer((req, res) => w.site.node(req, res, async () => { let s = ""; for await (const ch of req) s += ch; downstream = s.length; res.end("ok"); }));
+  await new Promise((r) => srv.listen(3911, r));
+  await fetch("http://localhost:3911/other", { method: "POST", body: "hello" });
+  ok(downstream === 5, "site.node leaves the body of routes it does not own for the next handler");
+  const status = (opts, body) => new Promise((r) => { const q = http.request({ port: 3911, ...opts }, (res) => { res.resume(); r(res.statusCode); }); q.on("error", () => r(0)); q.end(body); });
+  ok(await status({ method: "TRACE", path: "/ui/" }) === 500 && !rejected, "an unsupported method gets a 500, not an unhandled rejection");
+  ok(await status({ method: "POST", path: "/ui/sync" }, Buffer.alloc(1_100_000)) === 413, "a body over 1 MB is refused with 413");
+  process.off("unhandledRejection", onRej);
+  srv.closeAllConnections(); srv.close(); w.site.close(); await c.close();
+}
+
 // --- attach order ---
 const late = new McpServer({ name: "late", version: "1" });
 late.registerTool("x", { description: "x" }, async () => ({ content: [] }));

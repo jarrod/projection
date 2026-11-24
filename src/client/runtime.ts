@@ -2,13 +2,13 @@
 // Attributes: hx-tool, hx-vals, hx-trigger (click|submit|change|input), p-set, p-debounce, p-close, p-keep, p-keep-values.
 import { morph, changed } from "./morph.js";
 
-export interface Transport { call(tool: string, args: Record<string, unknown>): Promise<any> }
+export interface Transport { call(tool: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<any> }
 export type State = { h?: string; v?: number };
 
 const tpl = (s: string) => { const t = document.createElement("template"); t.innerHTML = s; return t.content.firstElementChild!; };
 
 export function start(t: Transport, { h, v }: State = {}) {
-  let params: Record<string, unknown> = {}, gen = 0;
+  let params: Record<string, unknown> = {}, gen = 0, poll: AbortController | undefined;
   const ready = () => document.documentElement.setAttribute("p-ready", "");
 
   const apply = (html: string) => {
@@ -23,15 +23,21 @@ export function start(t: Transport, { h, v }: State = {}) {
   };
 
   // One long-poll at a time. The server answers at once if we are behind (or v is unset), otherwise when something changes.
+  // Starting a new one cancels the old one, so a superseded poll doesn't hold a connection until it times out.
   const loop = async (g: number) => {
+    poll?.abort();
+    const { signal } = (poll = new AbortController());
     for (let wait = 500; g === gen; ) {
       try {
-        const r = (await t.call("p_sync", { params, h, v })).structuredContent;
+        const r = (await t.call("p_sync", { params, h, v }, signal)).structuredContent;
         if (g !== gen) return;
         wait = 500; v = r.v;
         if (r.html) { h = r.h; apply(r.html); }
         ready();
-      } catch { await new Promise((r) => setTimeout(r, (wait = Math.min(wait * 2, 10_000)))); }
+      } catch {
+        if (g !== gen) return;
+        await new Promise((r) => setTimeout(r, (wait = Math.min(wait * 2, 10_000))));
+      }
     }
   };
 

@@ -2,9 +2,9 @@
 import type { Transport } from "./runtime.js";
 
 export const httpTransport = (base: string): Transport => ({
-  async call(tool, args) {
+  async call(tool, args, signal) {
     const r = await fetch(`${base}/${tool === "p_sync" ? "sync" : "tool/" + encodeURIComponent(tool)}`, {
-      method: "POST", credentials: "same-origin",
+      method: "POST", credentials: "same-origin", signal,
       headers: { "Content-Type": "application/json", "P-Req": "1" },
       body: JSON.stringify(args),
     });

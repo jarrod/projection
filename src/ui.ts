@@ -7,6 +7,7 @@ import type { Html } from "./html.js";
 
 export const MCP_APP_MIME = "text/html;profile=mcp-app";
 const SYNC = "p_sync";
+const FROM_WEB = Symbol("web"); // marks the `extra` of a tool call made from a browser session
 
 /** View state. Lives in the viewer's browser; changed with `set` on a Button, Input, Form or Menu item. */
 export type Params = Record<string, any>;
@@ -68,12 +69,14 @@ export function defineUi(o: UiOptions) {
   const render = async (params: Params = {}, user = "local") => `<p-f id="p-root">${(await o.view({ user, params })).__html}</p-f>`;
 
   /** Render for a viewer. If they are up to date (`v`), wait for a change first; send HTML only if it differs from what they show (`h`). */
-  async function sync(user: string, s: SyncState = {}, waitMs = 25_000): Promise<SyncResult> {
-    if (s.v === version) await new Promise<void>((res) => {
-      const done = () => { clearTimeout(t); waiting.delete(done); res(); };
+  async function sync(user: string, s: SyncState = {}, waitMs = 25_000, signal?: AbortSignal): Promise<SyncResult> {
+    if (s.v === version && !signal?.aborted) await new Promise<void>((res) => {
+      const done = () => { clearTimeout(t); waiting.delete(done); signal?.removeEventListener("abort", done); res(); };
       const t = setTimeout(done, waitMs);
       waiting.add(done);
+      signal?.addEventListener("abort", done);
     });
+    if (signal?.aborted) throw new Error("cancelled"); // the viewer left or asked again: don't render for nobody
     const v = version, html = await render(s.params, user), h = hash(html);
     return h === s.h ? { v, h } : { v, h, html };
   }
@@ -110,7 +113,7 @@ export function defineUi(o: UiOptions) {
     server.registerTool(SYNC, {
       description: "UI: render, or wait for a change", _meta: { ui: { visibility: ["app"] } },
       inputSchema: { params: z.record(z.string(), z.any()).optional(), h: z.string().optional(), v: z.number().optional() },
-    }, async (s: SyncState, extra: any) => ({ ...text("ok"), structuredContent: await sync(identify(extra), s) }));
+    }, async (s: SyncState, extra: any) => ({ ...text("ok"), structuredContent: await sync(identify(extra), s, undefined, extra?.signal) }));
     if (!calls.has(server)) throw new Error("ui.attach(server) must be called before any tool is registered on the server.");
 
     if (o.web?.tool) server.registerTool(o.web.tool, {
@@ -133,8 +136,11 @@ export function defineUi(o: UiOptions) {
   function link(extra: any, server: object | undefined = latest) {
     const call = server && calls.get(server);
     if (!site || !call) throw new Error("ui.link needs defineUi({ web: { origin } }) and an attached server.");
+    // A browser session must not mint links: it could renew itself for ever, and prompt the user's host at will.
+    if (extra?.[FROM_WEB]) throw new Error("Not available from the web UI.");
     const authInfo = extra?.authInfo;
     return site.link(identify(extra), (name, args) => call({ method: "tools/call", params: { name, arguments: args } }, {
+      [FROM_WEB]: true,
       authInfo, requestId: crypto.randomUUID(), signal: new AbortController().signal,
       sendNotification: async () => {},
       sendRequest: async () => { throw new Error("Not available from the web UI."); },
