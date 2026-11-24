@@ -1,14 +1,10 @@
 import { defineUi, themes, ThemeToggle, html, Header, Button, Badge, Dot, Stat, Grid, Table, Tabs, Dialog, Form, Input, Textarea, Close, Empty, Stack, Card, Muted } from "mcp-projection";
 import { store, type Note } from "./store.js";
-import { paper } from "./theme.js";
-
-// UI_THEME picks a look: a shipped theme (terminal, pop), our own (paper, in theme.ts), or the default.
-const css = { terminal: themes.terminal, pop: themes.pop, paper }[process.env.UI_THEME ?? ""];
 
 export const ui = defineUi({
   name: "notes",
   attachTo: ["list_notes"],
-  css,
+  css: themes.terminal,
   web: { origin: process.env.UI_ORIGIN ?? "http://localhost:3000", tool: "open_notes_in_browser" },
   view: ({ params }) => {
     const q = String(params.q ?? "").toLowerCase();

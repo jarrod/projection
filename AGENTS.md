@@ -103,7 +103,7 @@ Snapshot HTML: `await ui.render({ q: "x" }, "u1")`.
 - Token values are `light-dark(light, dark)` and fall back to the host's MCP Apps variables (`--color-background-primary`, `--font-sans` ...), so the UI matches the host.
 - Your `defineUi({ css })` is unlayered, so it always wins, whatever the selector: `css: ":root { --p-r: 6px }"`.
 - Themes: `css: themes.terminal` (black, monospace, square) or `themes.pop` (bright: violet accent, pastel pill tags, rounded, tinted stats). Tweak with `` css: themes.terminal + `:root { --p-bg: #050505 }` ``. To write one, copy `src/ui/themes/terminal.css`: a `@layer p.theme { ... }` block that sets tokens and may restyle components.
-- Your own theme needs no layer: a plain `:root { --p-... }` block plus any component tweaks. See `examples/notes-server/src/theme.ts` (`UI_THEME=paper`). Fixed colours stop the UI following the host's palette; the default tokens are the ones that follow it.
+- Your own theme needs no layer: a plain `:root { --p-... }` block plus any component tweaks. Fixed colours stop the UI following the host's palette; the default tokens are the ones that follow it.
 - Light and dark: the host's theme (`data-theme`) wins, then `ThemeToggle()`, then the OS. Keep your own colours as `light-dark()` pairs so both modes work.
 - `bare: true` drops the tokens and the kit. `css: TOKENS + myKit` keeps the tokens and replaces the components.
 
