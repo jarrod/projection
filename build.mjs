@@ -21,15 +21,6 @@ writeFileSync("dist/assets.d.ts", readFileSync("src/assets.d.ts"));
 const server = (await build({ entryPoints: ["dist/index.js"], bundle: true, minify: true, format: "esm", platform: "node", write: false, external: ["zod", "@modelcontextprotocol/sdk", "node:*", "./assets.js"],
   plugins: [{ name: "x", setup(b) { b.onResolve({ filter: /assets\.js$/ }, (a) => ({ path: a.path, external: true })); } }] })).outputFiles[0].text;
 
-// docs/ is the source for these pages; the skill carries copies so it works on its own.
-const SHARED = ["reference.md", "troubleshooting.md"];
-for (const f of SHARED) {
-  const src = readFileSync(`docs/${f}`, "utf8");
-  for (const [, link] of src.matchAll(/\]\((?!https?:|#|\.\.\/skills\/mcp-projection\/)([^)#]+)/g))
-    if (!SHARED.includes(link)) throw new Error(`docs/${f} links to ${link}: shared pages may link only to ${SHARED.join(", ")} and skills/mcp-projection/`);
-  writeFileSync(`skills/mcp-projection/references/${f}`, `<!-- Copied from docs/${f} by build.mjs. Edit that file. -->\n` + src.replaceAll("](../skills/mcp-projection/", "](../"));
-}
-
 const gz = (s) => gzipSync(s, { level: 9 }).length;
 const budget = {
   "browser runtime, MCP host": [RUNTIME, 2500], "browser runtime, web": [WEB, 2000],

@@ -16,4 +16,4 @@ npm install && npm test        # build, example server, unit + MCP-host tests
 npm run test:web               # real Chrome via playwright-core (needs port 3000 free)
 ```
 
-Start with [Getting started](docs/getting-started.md), or browse [the docs](docs/README.md). Coding agents: read [AGENTS.md](./AGENTS.md). See `examples/notes-server` for a minimal integration.
+Start with [Getting started](docs/getting-started.md), then [Building a UI](docs/building-a-ui.md), [How it works](docs/how-it-works.md) and [Web mode](docs/web-mode.md). Coding agents: read [AGENTS.md](./AGENTS.md). See `examples/notes-server` for a minimal integration.

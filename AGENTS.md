@@ -72,7 +72,7 @@ http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or: 
 - One long-lived Node process. Viewers wait on a counter in memory, and web links and sessions are kept in memory: with several instances use sticky routing, and expect a restart to end browser sessions. Serverless and edge runtimes are not supported.
 - A change on one instance reaches viewers on another only when their poll times out (up to 25 s).
 - Every write renders the view once per distinct (user, params) being watched. Keep views small: page large tables (about 200 rows).
-- ESM only. Node 20 or later.
+- ESM only. Supported Node and SDK versions are in `package.json` (`engines`, `peerDependencies`).
 
 ## Changed in 0.3
 - `ui.link(extra, server)` and `ui.openInBrowser(extra, { server })` need the attached server.
@@ -83,12 +83,10 @@ http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or: 
 ## Where to look
 | Need | File |
 |---|---|
-| Every option, prop, runtime attribute, token, error | `docs/reference.md` |
-| Testing, previews, the tool snapshot | `docs/testing.md` |
-| Styling and themes | `docs/styling.md` |
+| Every component, prop and option | The types: `src/ui/components.ts`, `src/ui.ts`, `src/web.ts` |
+| Patterns | `skills/mcp-projection/references/recipes.md` |
+| Symptom → fix | `skills/mcp-projection/references/troubleshooting.md` |
 | Web mode in full | `docs/web-mode.md` |
-| Symptom → fix | `docs/troubleshooting.md` |
-| All docs | `docs/README.md` |
 | The whole integration, as an agent skill | `skills/mcp-projection/SKILL.md` |
 
 ## Not included (by design)
