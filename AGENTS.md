@@ -93,5 +93,15 @@ Snapshot HTML: `await ui.render("app", { user: "u1" })`.
 - Tokens (`--p-bg --p-fg --p-line --p-ring --p-r --p-font ...`) fall back to the host's MCP Apps variables (`--color-background-primary`, `--font-sans` ...), so the UI matches the host's theme.
 - Add CSS with `defineUi({ css })`. Replace the kit entirely with `bare: true`.
 
+## Sharp edges
+- **UI calls skip zod.** The handler gets the browser's arguments as sent: no coercion, no `.default()`, no validation. Put numbers and booleans in `args` (form fields are strings) and send defaults from the UI.
+- **A returned `isError` looks like success in the UI.** Only thrown errors set `p-error`. To show a failure, add an app-only twin tool that throws; don't change the agent's tool.
+- **Fragments must not throw.** The render pass runs inside the writing tool call, so a throw turns the agent's successful call into an error.
+- **No fragment boundary inside `<table>` or `<select>`.** The HTML parser moves `<p-f>` out. Per-item fragments go in a list or grid.
+- **`server.tool(...)` isn't captured.** Only `registerTool` goes through `ui.attach`.
+- **Web-mode handlers get a minimal `extra`**: `{ authInfo: { extra: { sub } }, ui: "web" }`.
+
+Full guide: `docs/guide.md`. Agent skill for the whole integration: `skills/mcp-projection/SKILL.md`.
+
 ## Not included (by design)
 Client routing, client state stores, JSX, a build step. For a page with a different layout, render a different root fragment.

@@ -57,7 +57,7 @@ Projection treats the UI as a **projection of server state**:
 npm install github:jarrod/projection
 ```
 
-The package builds itself on install (`prepare`). For a private repo, your git credentials need access.
+The package builds itself on install (`prepare`). For a private repo, your git credentials need access. npm 11 may warn that the `prepare` script isn't covered by `allowScripts`; if `node_modules/mcp-projection/dist/index.js` exists, the build ran and the warning can be ignored.
 
 ### 2. Write `src/ui.ts`
 
@@ -131,6 +131,19 @@ await view.click("pin_note", { id: 1 });           // act as the human
 
 For a visual check: `npx mcp-projection preview dist/ui.js [fragment] [--dark] > preview.html` renders a styled static page.
 
+## Guide and agent skill
+
+- **[docs/guide.md](docs/guide.md)** is the detailed guide: how projection works, how to design a UI from a tool list, every component and option, actions, live updates, web mode, testing, and the pitfalls to avoid.
+- **[skills/mcp-projection](skills/mcp-projection/SKILL.md)** is an agent skill (a folder with a `SKILL.md` that Claude Code and other coding agents load) that lets a coding agent do the whole integration: check fit, install, design the UI, write `ui.ts`, attach it, test, preview, and prove the agent's tools didn't change (`scripts/tool-snapshot.mjs`).
+
+Install the skill for Claude Code by copying the folder into `~/.claude/skills/` (all projects) or `.claude/skills/` in your server's repo:
+
+```bash
+git clone --depth 1 https://github.com/jarrod/projection /tmp/projection && cp -r /tmp/projection/skills/mcp-projection ~/.claude/skills/
+```
+
+The npm package ships both, so after installing you can also copy `node_modules/mcp-projection/skills/mcp-projection`. Then ask the agent to "add a projection UI to this MCP server".
+
 ## Sizes
 
 Minified and gzipped. The build fails if any of these exceed their budget.
@@ -152,6 +165,8 @@ src/ui/              components + CSS kit
 bin/                 preview CLI
 examples/notes-server/  an agent-first MCP server with the UI added
 tests/               unit, MCP-host (official ext-apps AppBridge) and real-Chrome suites
+docs/guide.md        detailed guide to writing UIs for MCP servers
+skills/mcp-projection/  agent skill: install, design, integrate, verify
 AGENTS.md            API and rules for coding agents
 CLAUDE.md            orientation for Claude Code
 ```
