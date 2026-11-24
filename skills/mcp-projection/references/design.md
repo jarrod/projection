@@ -1,3 +1,4 @@
+<!-- Copied from docs/design.md by build.mjs. Edit that file. -->
 # Designing a projection UI
 
 The tool list says what the system can do. The UI shows what a person needs to see and lets them do the few things that are faster by hand. Design from the person, then map to tools.
@@ -48,7 +49,7 @@ view
 
 ## 4. Layout patterns
 
-Pick one or two per screen. Code for each is in recipes.md.
+Pick one or two per screen. Code for each is in [recipes.md](../references/recipes.md).
 
 | Pattern | Use it for | Built from |
 |---|---|---|

@@ -13,7 +13,7 @@ Add a live, styled UI for humans to any MCP server without bringing a web framew
 
 ```
 npm install && npm test        # build, example server, unit + MCP-host tests
-npm run test:web               # real Chrome (needs Python Playwright)
+npm run test:web               # real Chrome via playwright-core (needs port 3000 free)
 ```
 
-Start with [AGENTS.md](./AGENTS.md). See `examples/notes-server` for a minimal integration.
+Start with [Getting started](docs/getting-started.md), or browse [the docs](docs/README.md). Coding agents: read [AGENTS.md](./AGENTS.md). See `examples/notes-server` for a minimal integration.

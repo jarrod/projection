@@ -1,6 +1,6 @@
 # mcp-projection API reference (0.3)
 
-Everything is imported from `"mcp-projection"` except the test harness (`"mcp-projection/testing"`).
+Every option, member, component, attribute and error message. Everything is imported from `"mcp-projection"` except the test harness (`"mcp-projection/testing"`).
 
 ## Contents
 
@@ -17,6 +17,7 @@ Everything is imported from `"mcp-projection"` except the test harness (`"mcp-pr
 - [Web mode](#web-mode)
 - [Test harness](#test-harness)
 - [Preview CLI](#preview-cli)
+- [Tool snapshot script](#tool-snapshot-script)
 - [Errors](#errors)
 
 ## defineUi options
@@ -265,13 +266,33 @@ End the script with `process.exit()`: a pending server-side long-poll can hold N
 npx mcp-projection preview dist/ui.js ['{"q":"x"}'] [--dark|--light] [--user=id] > preview.html
 ```
 
-The module must export `ui` (or default-export it). The view runs in a fresh process, often with an empty store; seed data with a script calling `ui.preview()` instead (assets/preview.mjs).
+The module must export `ui` (or default-export it). The page has the CSS and no runtime. The view runs in a fresh process, often with an empty store; seed data with a script calling `ui.preview()` instead ([assets/preview.mjs](../skills/mcp-projection/assets/preview.mjs)).
+
+## Tool snapshot script
+
+`scripts/tool-snapshot.mjs` in the skill (installed at `node_modules/mcp-projection/skills/mcp-projection/scripts/`) connects as a plain MCP client and records every model-visible tool, everything except `_meta`. Run it from the server's project folder, which is where it finds the SDK.
+
+```bash
+node tool-snapshot.mjs --out before.json -- node dist/index.js            # before the UI
+node tool-snapshot.mjs --compare before.json -- node dist/index.js        # after
+node tool-snapshot.mjs --url http://localhost:3000/mcp --compare before.json
+```
+
+| Flag | Meaning |
+|---|---|
+| `-- <command>` | Start the server with this command over stdio |
+| `--url <url>` | Connect to a running Streamable HTTP server instead |
+| `--out <file>` | Write the snapshot (default: print it) |
+| `--cwd <dir>` | Where to run the command and find the SDK (default: `.`) |
+| `--compare <file>` | Compare with a snapshot. A changed or missing tool, or a different call result, exits 1. New model-visible tools are listed but allowed, since `web.tool` adds one on purpose |
+| `--strict` | With `--compare`, new model-visible tools fail too |
+| `--calls <file>` | A JSON array of `[toolName, args]` whose results are recorded too. List only calls that are safe against the server's data |
 
 ## Errors
 
 | Message | Fix |
 |---|---|
-| `view must return html`...`.` | Return an `html` template (or a component), not a string |
+| `` view must return html`...`. `` | Return an `html` template (or a component), not a string |
 | `ui.attach(server) must be called before any tool is registered on the server.` | Attach first |
 | `ui.attach() was already called for this server.` | Attach once per server instance |
 | `This @modelcontextprotocol/sdk version is not supported: tools/call handler not recognised.` | Use an SDK 1.20 or later `McpServer` |

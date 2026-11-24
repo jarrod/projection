@@ -1,201 +1,64 @@
 ---
 name: mcp-projection
-description: Add a live, server-rendered UI for humans to an existing TypeScript MCP server with the mcp-projection library, without changing the tools, schemas or results the model sees. Covers checking fit, installing the library, deciding what the UI should show, writing ui.ts (one view function and components), attaching it to McpServer, optional web mode, and testing, previewing and proving the agent surface is unchanged. Use when someone wants a UI, dashboard, admin panel, live view or MCP App for an MCP server, mentions mcp-projection, projection, defineUi or ui.attach, or wants people to watch and act on what an agent does through MCP tools.
+description: Install mcp-projection and add a basic MCP Apps UI to an existing Node.js MCP server. Use when asked to set up Projection or wire existing MCP tools into a simple read-only or interactive UI.
 ---
 
-# Add a UI to an MCP server with mcp-projection
+# Set up a basic Projection UI
 
-`mcp-projection` adds a second view of an MCP server for the people working with the agent. It shows up inside MCP Apps hosts (Claude, ChatGPT, VS Code) and, optionally, on a normal URL. The model's view of the server doesn't change.
+## 1. Find the server and choose the UI mode
 
-- **UI = f(user, params).** One `view` function on the server returns HTML. Nothing renders in the browser.
-- **Actions are the existing tools.** `Button({ tool: "pin_note", args: { id } })` makes the same `tools/call` the agent makes: same validation, same handler.
-- **Live by default.** After every tool call, from the agent or a human, open UIs render again and receive the HTML if it changed. Nothing to declare.
-- **View state is params.** Search text, the open row, the page: a small object kept in the viewer's browser and sent with each render. Change it with `set`.
+Check for a long-lived Node 20+ ESM server using `McpServer` from `@modelcontextprotocol/sdk` ^1.20.0 and Zod ^3.25.0 or ^4.0.0. Find where it creates the server, registers tools, and reads the data the UI should show. If the server is incompatible, explain the mismatch before changing it.
 
-`<skill-dir>` below means the folder that contains this file.
+List the tools from the existing registrations, or use `tools/list` if the server is already connected. Show the caller each tool's name, what it does, and whether it reads, writes, or needs review. Inspect the handler to confirm uncertain behavior without running it.
 
-## 1. Check fit before doing anything
+- **Read-only** shows data through the existing store and lets viewers interact with view-only controls such as filters. An existing read tool opens the UI. The view offers no tool-backed actions.
+- **Full MCP** shows the same data and adds controls for the existing tool actions the caller selects. Choose an opening tool, usually a list or status tool, and the actions separately.
 
-All of these must hold. If one fails, stop and tell the user what would have to change.
+If any choices are missing, present the list and ask for the missing choices in one prompt. For example, `Read-only · open: list_notes` or `Full MCP · open: list_notes · actions: pin_note`. If the caller delegates the choice, start read-only with the clearest list or status tool. These modes control what the UI offers. The server continues to authorize its tools as before.
 
-- Node 20+, TypeScript or JavaScript, ES modules.
-- The server uses `McpServer` from `@modelcontextprotocol/sdk` (1.20+) with zod (3.25+ or 4). A low-level `Server` or another runtime does not work.
-- One long-lived server process. Viewers wait on an in-memory counter, so several replicas lag (up to 25 s) and serverless or edge runtimes are not supported.
+## 2. Install Projection
 
-One thing is fixable and common:
-
-- **No server factory.** Tests need `export function createServer()` that builds the server, registers tools and returns it, with `connect(transport)` left in the entry file. Make that move if the server is built at module top level. Change nothing else.
-
-Tools registered with `server.tool(...)` are fine: attach captures every `tools/call`, whatever the registration style.
-
-## 2. Workflow
-
-Copy this list into your task list and work through it in order.
-
-1. Survey the server
-2. Snapshot what the model sees
-3. Install the library
-4. Design the UI (write a short plan)
-5. Write `src/ui.ts`
-6. Attach it to the server
-7. Build and test
-8. Preview and look at it
-9. Compare the snapshot
-10. Web mode, if wanted
-11. Report back
-
-### Step 1: Survey the server
-
-Find, and note down:
-
-- `package.json`: SDK and zod versions, module type, build command, the command that starts the server (for example `node dist/index.js` or `npx tsx src/index.ts`), and the package manager (lockfile).
-- Where `new McpServer(` is constructed, whether a factory exists, and whether a new server is created per session or request.
-- Every tool registration: name, its arguments, whether it reads or changes data, whether it has `annotations.readOnlyHint`, and which store or database functions it calls.
-- The data layer the tools use (store module, ORM, API client). The view will call it directly.
-- The transport (stdio, Streamable HTTP) and the entry file.
-- Whether requests carry authentication (`authInfo`). Without it every viewer is the same user, `"local"`. With it, `authInfo.extra.sub` must be set.
-- Anything that changes data outside tools: cron jobs, webhooks, queues, background workers.
-
-```bash
-grep -rnE "registerTool\(|\.tool\(|new McpServer|StdioServerTransport|StreamableHTTPServerTransport|authInfo" src
-```
-
-### Step 2: Snapshot what the model sees
-
-Build the server, then record its model-visible tools before changing anything. Run from the server's project folder (the script finds the SDK there) and put the server's start command after `--`. Save the file outside the repo.
-
-```bash
-node <skill-dir>/scripts/tool-snapshot.mjs --out /tmp/projection-before.json -- node dist/index.js
-```
-
-For an HTTP-only server, start it and use `--url http://localhost:3000/mcp` instead of `-- command`. `--calls calls.json` (a JSON array of `[toolName, args]`) also records results; only include calls that are safe to run against the server's data, such as reads against a test database.
-
-### Step 3: Install the library
+Use the target project's package manager and keep its existing Projection dependency if present. For npm:
 
 ```bash
 npm install github:jarrod/projection
 ```
 
-Use the project's package manager (`pnpm add`, `yarn add`) if it isn't npm. Then confirm the build exists:
+If the Git install leaves the package without built exports, check out the same source revision in a temporary directory and run `npm ci` and `npm pack` there. Install the tarball printed by `npm pack` from the target project.
 
-```bash
-ls node_modules/mcp-projection/dist/index.js
+## 3. Add and attach the view
+
+Create `src/ui.ts` (or the matching JavaScript file). Adapt the store, title, fields, and `attachTo` tool to the project. Scope reads to the same user the existing tools use. Projection gets that ID from `authInfo.extra.sub` by default and uses `"local"` without auth. Use `identify` for a different existing identity mapping.
+
+```ts
+import { defineUi, Empty, Header, html, Table } from "mcp-projection";
+import { store } from "./store.js";
+
+export const ui = defineUi({
+  name: "notes",
+  attachTo: ["list_notes"],
+  view: async ({ user }) => html`
+    ${Header({ title: "Notes" })}
+    ${Table({
+      id: "notes",
+      rows: await store.list(user),
+      rowKey: (note) => note.id,
+      columns: [{ label: "Title", key: "title" }],
+      empty: Empty({ title: "No notes yet" }),
+    })}`,
+});
 ```
 
-npm 11 may warn that `mcp-projection`'s `prepare` script isn't covered by `allowScripts`. If `dist/index.js` exists, ignore it. If it doesn't, build a tarball and install that:
+In Full MCP mode, add controls for the selected actions and match each tool's existing schema. For a row action, import `Button` and use `Button({ tool: "pin_note", args: { id: note.id } }, "Pin")` in the action column. Keep existing tools, schemas, and handlers intact. See the [component reference](references/reference.md#components) if you need a different control.
 
-```bash
-git clone --depth 1 https://github.com/jarrod/projection /tmp/projection && cd /tmp/projection && npm install && npm run build && npm pack
-```
-
-```bash
-npm install /tmp/projection/mcp-projection-0.3.0.tgz
-```
-
-The installed package includes `AGENTS.md`, the full guide at `docs/guide.md` and this skill.
-
-### Step 4: Design the UI
-
-Read [references/design.md](references/design.md). Then write a plan in this shape:
-
-```
-Who and when:      <who opens it, and the moment the agent shows it>
-At a glance:       <what they must understand in five seconds>
-View:              <sections, each as a plain function, and the data each reads>
-Params:            <name -> what it controls: search, selection, page, tab>
-Actions:           <element -> tool -> args>, ...
-attachTo:          <the read tool after which a person wants to look>
-Outside writes:    <where ui.write() goes for cron/webhooks/workers>
-```
-
-If the request was open-ended ("add a UI") or the server has more than about eight tools, show the plan to the user and ask before building. If they gave a clear spec, carry on.
-
-### Step 5: Write `src/ui.ts`
-
-Start from [assets/ui.template.ts](assets/ui.template.ts). Check exact props and options in [references/api.md](references/api.md) and copy patterns from [references/recipes.md](references/recipes.md). Keep all UI code in this one file.
-
-### Step 6: Attach it to the server
-
-The only edits to existing code:
+Import the UI where the server is created. Wrap the existing constructor call once per instance, before any tools are registered.
 
 ```ts
 import { ui } from "./ui.js";
-const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));   // BEFORE any registerTool
+
+const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 ```
 
-- Call `ui.attach` once per server instance (per-session servers are fine), before the first tool is registered. It throws otherwise.
-- In tool handlers, scope data with `ui.identify(extra)` so tools and view agree on who the user is.
-- Add `ui.write()` where data changes outside tools. Annotate tools that change nothing with `readOnlyHint: true`: their calls don't wake viewers.
+## 4. Check the setup
 
-### Step 7: Build and test
-
-Write a test from [assets/ui.test.mjs](assets/ui.test.mjs). Follow the project's test setup if it has one; otherwise add a plain Node script and run it after building. It must cover: the UI mounts, an agent call shows up live, a human action works, and the sync tool is not model-visible.
-
-### Step 8: Preview and look at it
-
-Copy [assets/preview.mjs](assets/preview.mjs) next to the build output, seed realistic data through the project's own store, and run it. It writes light, dark and 420 px narrow HTML files. Screenshot them with whatever browser tool you have, or headless Chrome:
-
-```bash
-google-chrome --headless=new --screenshot=preview-light.png --window-size=1040,900 "file://$PWD/preview-light.html"
-```
-
-Headless Chrome won't lay out narrower than 500 px, so screenshot `preview-narrow.html` (which frames the page at 420 px) with a 520 px window. Look at every image. Check spacing, alignment, overflow at narrow width, empty states, long text and dark mode. Fix what looks wrong and look again. Delete the preview files when done.
-
-### Step 9: Compare the snapshot
-
-```bash
-node <skill-dir>/scripts/tool-snapshot.mjs --compare /tmp/projection-before.json -- node dist/index.js
-```
-
-It must print `OK`. The only acceptable new model-visible tool is the one named by `web.tool`. If anything else changed, find the edit that caused it and undo it.
-
-### Step 10: Web mode, if wanted
-
-Only if the user wants the UI on a URL. See "Web mode" in [references/api.md](references/api.md) and the deployment recipes in [references/recipes.md](references/recipes.md). Web mode adds one model-visible tool if you set `web.tool`; mention that to the user.
-
-### Step 11: Report back
-
-Tell the user:
-
-- which files changed, and that existing tools are untouched (with the snapshot result);
-- how to see the UI: in a host, by asking the agent to call the `attachTo` tool; on the web, through the `web.tool`;
-- what was tested and what wasn't (projection hasn't been tried in a real host yet);
-- limits that apply: one process, and identity is `"local"` without authentication.
-
-## 3. Hard rules
-
-1. **Never change an existing tool's name, description, schema, annotations or results.** The allowed edits are wrapping construction in `ui.attach(...)`, extracting a factory, and adding `ui.write()` calls.
-2. **`ui.attach(server)` comes before every tool registration.**
-3. **The view returns an `html` template.** Anything else throws.
-4. **Don't add model-visible tools for UI needs**, other than an explicit `web.tool`. View state goes in params, not in tools.
-5. **No client JavaScript.** No `<script>` in the view; use `Tabs`, `Dialog`, `Menu`, `<details>`, `set` and server tools instead.
-6. **Escape by default.** Values go through `html`; use `raw()` only for HTML you produced.
-7. **Stable, page-unique ids on everything that repeats.** `Table` needs `id` and `rowKey`.
-8. **Read params defensively.** They are untrusted: `String(params.q ?? "")`.
-9. **Scope data by `user`.** Never share one user's data with another.
-
-## 4. Gotchas that cause most bugs
-
-- **Form fields arrive as strings.** The UI call goes through the server's own `tools/call` handler, so zod coercion and defaults run. A text field is a string and a checkbox is a boolean. For a number use `z.coerce.number()` in the schema, or pass it in `args`.
-- **A returned `isError` shows as `p-error`.** The message appears on the control. No twin tool is needed.
-- **The view runs after every tool call, for every watched (user, params).** Keep it fast and small. Page large tables (about 200 rows).
-- **The view must not throw.** Catch inside if the data layer can fail.
-- **Data changed outside a tool call needs `ui.write()`.**
-- **`` ${n && html`...`} `` prints `0` when `n` is 0.** Use `n > 0 &&`.
-- **Web mode tool calls can't send notifications or requests, and can't mint links.**
-- **End tests with `process.exit()`.** A pending long-poll keeps Node alive for up to 25 s.
-
-Symptoms and fixes: [references/troubleshooting.md](references/troubleshooting.md).
-
-## 5. Files in this skill
-
-| File | Read it when |
-|---|---|
-| [references/design.md](references/design.md) | Step 4: turning a tool list into a screen, layout patterns, visual rules |
-| [references/api.md](references/api.md) | Steps 5, 6, 10: every option, component prop, attribute, token and test API |
-| [references/recipes.md](references/recipes.md) | Step 5: tested code for search, confirm dialogs, approvals, settings, paging, outside writes, web deployments |
-| [references/troubleshooting.md](references/troubleshooting.md) | An error, or the UI doesn't do what you expect |
-| [assets/ui.template.ts](assets/ui.template.ts) | Starting `src/ui.ts` |
-| [assets/ui.test.mjs](assets/ui.test.mjs) | Writing the test |
-| [assets/preview.mjs](assets/preview.mjs) | Rendering previews with seeded data |
-| [scripts/tool-snapshot.mjs](scripts/tool-snapshot.mjs) | Steps 2 and 9 |
+Run the project's usual build or type check. If a test MCP Apps host is available, call the opening tool and check the expected data and controls. Tell the caller which tool opens the UI and which actions are available.

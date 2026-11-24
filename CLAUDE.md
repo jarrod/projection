@@ -2,7 +2,7 @@
 
 Library: `mcp-projection`. It adds a live, styled UI for humans to an MCP server without changing agent-facing tools.
 
-- **Read `AGENTS.md` first.** It has the API, the rules and the components.
+- **Read `AGENTS.md` first.** It has the rules, the components and the two-step integration. The full API is in `docs/reference.md`; `docs/README.md` lists all docs.
 - Layout: library in `src/` (`ui.ts` core and MCP attach, `web.ts` web mode, `ui/` components and CSS) and `src/client/` (browser runtime, bundled into `dist/assets.js` by `build.mjs`). Example integration in `examples/notes-server/`. End-to-end tests in `tests/`.
 - Build: `npm install && npm run build`. The build fails if a size budget is exceeded. Don't raise a budget without a reason.
 - Test: `npm test` (agent snapshot + unit + MCP host). `npm run test:web` also runs real Chrome via `playwright-core` (uses your installed Chrome, or set `CHROME_PATH`; needs port 3000 free).
@@ -20,6 +20,6 @@ Library: `mcp-projection`. It adds a live, styled UI for humans to an MCP server
 - With several server instances, a change made on one reaches viewers on another only when their poll times out (up to 25 s). A viewer that moves between instances is answered at once each time, so the runtime paces itself to about one poll a second.
 - Web mode keeps links and sessions in memory: it needs a single instance or sticky routing, and a restart ends every browser session.
 - A browser session is not ended when the MCP connection that made it closes (a per-request server closes after every request, so that cannot be the signal). The integrator calls `ui.site.revoke(user)`.
-- The single-use link is a pre-authenticated URL, which the MCP elicitation spec says servers must not send. Kept on purpose (users never sign in on the web); see AGENTS.md, Web mode.
+- The single-use link is a pre-authenticated URL, which the MCP elicitation spec says servers must not send. Kept on purpose (users never sign in on the web); see `docs/web-mode.md`.
 - Morph: when an element without an id disappears, the unkeyed siblings after it are rebuilt (an input there loses focus and text). The fix did not fit the runtime budget.
 - The whole view is sent when it changes; very large views would want per-region updates.
