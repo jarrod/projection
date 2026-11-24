@@ -4,14 +4,21 @@
   "description": "Bolt a live, styled human UI onto any MCP server. No framework.",
   "scripts": {
     "build": "node build.mjs",
-    "prepack": "npm run build",
+    "prepare": "node build.mjs",
     "example": "cd examples/notes-server && npm install && npm run build",
     "test": "npm run build && npm run example && cd tests && npm install && npm run snapshot && npm run unit && npm run host",
     "test:web": "cd tests && npm run web"
   },
-  "keywords": [],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-apps",
+    "ui",
+    "server-rendered",
+    "live"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "type": "module",
   "files": [
     "dist",
