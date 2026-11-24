@@ -23,8 +23,8 @@ Projection adds a live, styled UI for humans to an MCP server without changing w
 - [Troubleshooting](troubleshooting.md): symptom, cause, fix.
 - [Recipes](../skills/mcp-projection/references/recipes.md): tested code for common patterns.
 
-**Letting an agent do it.** Give it the skill in [`skills/mcp-projection`](../skills/mcp-projection/SKILL.md). It carries copies of the design, reference and troubleshooting pages.
+**Letting an agent do it.** Give it the skill in [`skills/mcp-projection`](../skills/mcp-projection/SKILL.md). It carries copies of the reference and troubleshooting pages.
 
 ## Editing these docs
 
-`design.md`, `reference.md` and `troubleshooting.md` are copied into `skills/mcp-projection/references/` by `npm run build`, so the skill works on its own. Edit them here, never in the skill. They may link only to each other and to files under `skills/mcp-projection/`; the build fails on any other relative link. Link to a section by its heading, never by a number in the prose.
+`reference.md` and `troubleshooting.md` are copied into `skills/mcp-projection/references/` by `npm run build`, so the skill works on its own. Edit them here, never in the skill. They may link only to each other and to files under `skills/mcp-projection/`; the build fails on any other relative link. Link to a section by its heading, never by a number in the prose.

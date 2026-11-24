@@ -22,7 +22,7 @@ const server = (await build({ entryPoints: ["dist/index.js"], bundle: true, mini
   plugins: [{ name: "x", setup(b) { b.onResolve({ filter: /assets\.js$/ }, (a) => ({ path: a.path, external: true })); } }] })).outputFiles[0].text;
 
 // docs/ is the source for these pages; the skill carries copies so it works on its own.
-const SHARED = ["design.md", "reference.md", "troubleshooting.md"];
+const SHARED = ["reference.md", "troubleshooting.md"];
 for (const f of SHARED) {
   const src = readFileSync(`docs/${f}`, "utf8");
   for (const [, link] of src.matchAll(/\]\((?!https?:|#|\.\.\/skills\/mcp-projection\/)([^)#]+)/g))
