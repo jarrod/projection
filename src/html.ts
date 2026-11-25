@@ -11,7 +11,7 @@ export const esc = (v: unknown): string => {
 };
 
 // The brand is a symbol, which JSON cannot carry: a { "__html": ... } object arriving in params or tool data is escaped like any value.
-const TAG = Symbol.for("mcp-projection.html");
+const TAG = Symbol.for("mcp-projector.html");
 /** Mark a string as trusted HTML. Never pass user input. */
 export const raw = (s: string): Html => ({ __html: s, [TAG]: true }) as Html;
 export const isHtml = (v: unknown): v is Html => typeof v === "object" && v !== null && (v as any)[TAG] === true;

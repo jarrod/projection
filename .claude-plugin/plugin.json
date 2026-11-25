@@ -1,5 +1,5 @@
 {
-  "name": "mcp-projection",
+  "name": "mcp-projector",
   "description": "Add a live, in-browser view to an existing Node.js MCP server, so people can see and act on what its tools do.",
   "repository": "https://github.com/jarrod/projector"
 }

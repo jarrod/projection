@@ -9,7 +9,7 @@ import { esc } from "./html.js";
 
 export type WebOptions = {
   /** Public origin the browser uses, e.g. "https://app.example.com". Without it, the UI is served on this machine only
-   *  (127.0.0.1, a free port) by a listener projection starts itself. */
+   *  (127.0.0.1, a free port) by a listener projector starts itself. */
   origin?: string;
   /** Mount path. Default "/ui". */
   base?: string;

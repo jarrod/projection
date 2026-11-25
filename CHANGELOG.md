@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Renamed from `mcp-projection` to `mcp-projector`: the package, its imports, the command and the skill. Nothing else in the API changed.
 - Web mode is on by default. Every UI adds `open_<name>_in_browser`: rename it with `web.tool`, drop it with `tool: false`, or turn web mode off with `web: false`. Without `origin`, the UI is served on 127.0.0.1 at a free port. A request from a non-loopback host then fails with "Set web.origin" instead of getting a link that can't work.
 - `p_sync` is listed only to clients that announce MCP Apps (`io.modelcontextprotocol/ui`), so a plain client's model never sees it. Calls still work.
 - If URL elicitation fails or times out, `open_<name>_in_browser` returns the link as text instead of an error.

@@ -1,11 +1,11 @@
-import { defineUi, themes, ThemeToggle, html, Header, Button, Badge, Dot, Stat, Grid, Table, Tabs, Dialog, Form, Input, Textarea, Close, Empty, Stack, Card, Muted } from "mcp-projection";
+import { defineUi, themes, ThemeToggle, html, Header, Button, Badge, Dot, Stat, Grid, Table, Tabs, Dialog, Form, Input, Textarea, Close, Empty, Stack, Card, Muted } from "mcp-projector";
 import { store, type Note } from "./store.js";
 
 export const ui = defineUi({
   name: "notes",
   attachTo: ["list_notes"],
   css: themes.terminal,
-  web: { origin: process.env.UI_ORIGIN }, // unset: projection serves the UI itself on 127.0.0.1
+  web: { origin: process.env.UI_ORIGIN }, // unset: projector serves the UI itself on 127.0.0.1
   view: ({ user, params }) => {
     const q = String(params.q ?? "").toLowerCase();
     const notes = store.list(user).filter((n) => n.title.toLowerCase().includes(q));

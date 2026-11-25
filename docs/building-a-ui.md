@@ -6,7 +6,7 @@ What to know once the first view works.
 
 Start from the person, not the tool list. Ask what they need to understand in five seconds (usually what exists, what state it's in and what changed), and what is faster to do by hand than by asking the agent. Those few things become buttons. Everything else stays with the agent.
 
-Pick one tool for `attachTo`, usually the main list or status tool. It only matters to apps that support MCP Apps, which projection hasn't been tested in.
+Pick one tool for `attachTo`, usually the main list or status tool. It only matters to apps that support MCP Apps, which projector hasn't been tested in.
 
 ## The view
 
@@ -69,7 +69,7 @@ Every tool call refreshes the UI, except tools marked `readOnlyHint: true`, whic
 
 ## Users
 
-Projection has no sign-in. The user comes from MCP auth: `authInfo.extra.sub`, or `"local"` when there is no auth, in which case every viewer is the same user. In your tool handlers, use `ui.identify(extra)` to get the same id the view sees. To map identity differently, pass `identify` to `defineUi`.
+Projector has no sign-in. The user comes from MCP auth: `authInfo.extra.sub`, or `"local"` when there is no auth, in which case every viewer is the same user. In your tool handlers, use `ui.identify(extra)` to get the same id the view sees. To map identity differently, pass `identify` to `defineUi`.
 
 ## Styling
 
@@ -92,6 +92,6 @@ A few rules that keep it readable:
 
 ## More
 
-- Patterns for queues, filters, paging, detail views and settings: [recipes](../skills/mcp-projection/references/recipes.md).
-- When something goes wrong: [troubleshooting](../skills/mcp-projection/references/troubleshooting.md).
+- Patterns for queues, filters, paging, detail views and settings: [recipes](../skills/mcp-projector/references/recipes.md).
+- When something goes wrong: [troubleshooting](../skills/mcp-projector/references/troubleshooting.md).
 - Every component's props: the types in [`components.ts`](../src/ui/components.ts).

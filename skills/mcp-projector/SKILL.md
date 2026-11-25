@@ -1,13 +1,13 @@
 ---
-name: mcp-projection
-description: Add mcp-projection to an existing Node.js MCP server, so people can open a live view of it in their browser and use its tools from there. Use when asked to set up Projection, or to add a UI, dashboard, admin panel or live view to an MCP server's existing tools, or when the code mentions defineUi or ui.attach.
+name: mcp-projector
+description: Add mcp-projector to an existing Node.js MCP server, so people can open a live view of it in their browser and use its tools from there. Use when asked to set up Projector, or to add a UI, dashboard, admin panel or live view to an MCP server's existing tools, or when the code mentions defineUi or ui.attach.
 ---
 
-# Set up a basic Projection UI
+# Set up a basic Projector UI
 
 ## 1. Find the server and its tools
 
-Projection runs inside a long-lived Node server built on `McpServer` from the MCP TypeScript SDK. A low-level `Server` or another language won't work; say so before changing anything. Supported versions are in Projection's `package.json` (`engines` and `peerDependencies`), and the package manager reports a mismatch when you install.
+Projector runs inside a long-lived Node server built on `McpServer` from the MCP TypeScript SDK. A low-level `Server` or another language won't work; say so before changing anything. Supported versions are in Projector's `package.json` (`engines` and `peerDependencies`), and the package manager reports a mismatch when you install.
 
 Find where the server is created, where tools are registered, and the store or API the tools read. List each tool with what it does and whether it reads or changes data. Read the handler when that isn't clear; don't run it.
 
@@ -19,9 +19,9 @@ Ask the caller one question, showing the tool list from step 1:
 
 For example: "Open on `list_notes`, watch only" or "Open on `list_notes`, with `pin_note` and `delete_note` as actions". Skip anything the request already answers. If the caller leaves it to you, choose. A watch-only UI on the clearest list or status tool is a good start. Search and filters need no tools, so any UI can have them.
 
-## 3. Install Projection
+## 3. Install Projector
 
-Use the target project's package manager and keep its existing Projection dependency if present. For npm:
+Use the target project's package manager and keep its existing Projector dependency if present. For npm:
 
 ```bash
 npm install github:jarrod/projector
@@ -31,10 +31,10 @@ If the Git install leaves the package without built exports, check out the same 
 
 ## 4. Add and attach the view
 
-Create `src/ui.ts` (or the matching JavaScript file). Adapt the store, title, fields, and `attachTo` tool to the project. Scope reads to the same user the existing tools use. Projection gets that ID from `authInfo.extra.sub` by default and uses `"local"` without auth. Use `identify` for a different existing identity mapping.
+Create `src/ui.ts` (or the matching JavaScript file). Adapt the store, title, fields, and `attachTo` tool to the project. Scope reads to the same user the existing tools use. Projector gets that ID from `authInfo.extra.sub` by default and uses `"local"` without auth. Use `identify` for a different existing identity mapping.
 
 ```ts
-import { defineUi, Empty, Header, html, Table } from "mcp-projection";
+import { defineUi, Empty, Header, html, Table } from "mcp-projector";
 import { store } from "./store.js";
 
 export const ui = defineUi({
@@ -58,7 +58,7 @@ If the UI has actions, add a control for each chosen tool, matching its schema. 
 { label: "", cell: (note) => Button({ size: "sm", tool: "pin_note", args: { id: note.id } }, "Pin") }
 ```
 
-Form fields, inputs and selects send text, and checkboxes send booleans. Values in `args` keep their JSON type, so pass ids and other numbers there: a `z.number()` schema rejects a string. For other controls and their props, read the documented types in `node_modules/mcp-projection/dist/ui/components.d.ts`, and see [recipes](references/recipes.md) for common patterns.
+Form fields, inputs and selects send text, and checkboxes send booleans. Values in `args` keep their JSON type, so pass ids and other numbers there: a `z.number()` schema rejects a string. For other controls and their props, read the documented types in `node_modules/mcp-projector/dist/ui/components.d.ts`, and see [recipes](references/recipes.md) for common patterns.
 
 Import the UI where the server is created. Wrap the existing constructor call once per instance, before any tools are registered.
 

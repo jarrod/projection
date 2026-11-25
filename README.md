@@ -1,4 +1,4 @@
-# mcp-projection
+# mcp-projector
 
 A live UI for the people working alongside your agents. Add it to any MCP server without changing its tools.
 

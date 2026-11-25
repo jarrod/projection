@@ -8,11 +8,11 @@ Find the symptom, check the cause, apply the fix.
 |---|---|---|
 | `ui.attach(server) must be called before any tool is registered on the server.` | A tool was registered before `attach` | Wrap construction: `ui.attach(new McpServer(...))`, then register tools |
 | `ui.attach() was already called for this server.` | `attach` called twice on one instance | Once per server instance; call it where the instance is created |
-| `This @modelcontextprotocol/sdk version is not supported: tools/call handler not recognised.` | The SDK is older than Projection's `peerDependencies` allow, or changed its internals | Upgrade the SDK |
+| `This @modelcontextprotocol/sdk version is not supported: tools/call handler not recognised.` | The SDK is older than Projector's `peerDependencies` allow, or changed its internals | Upgrade the SDK |
 | `Tool p_sync is already registered` | Two `defineUi` UIs attached to one server | One `ui` per server; put both screens in one view (tabs, a param) |
 | No UI appears in the host | Tool isn't in `attachTo`, or the host doesn't support MCP Apps | Add the tool to `attachTo`; check `t.resourceUri` in a test; try web mode |
 | Agent calls don't update the UI | The tool is annotated `readOnlyHint: true`, or the data changed outside a tool | Drop the annotation if it writes; call `ui.write()` for changes outside tools |
-| `mcp-projection` imports fail after install | `dist/` wasn't built | Build a tarball and install that: clone the repository, `npm install && npm run build && npm pack`, then `npm install` the `.tgz` |
+| `mcp-projector` imports fail after install | `dist/` wasn't built | Build a tarball and install that: clone the repository, `npm install && npm run build && npm pack`, then `npm install` the `.tgz` |
 
 ## Actions
 

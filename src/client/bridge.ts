@@ -42,7 +42,7 @@ export async function mcpBridge(port: Port = windowPort()): Promise<Transport> {
       signal?.addEventListener("abort", () => { if (pending.delete(n)) { notify("notifications/cancelled", { requestId: n }); rej(); } }, { once: true });
     });
 
-  const init = await request("ui/initialize", { appInfo: { name: "mcp-projection", version: __VERSION__ }, appCapabilities: {}, protocolVersion: "2026-01-26" });
+  const init = await request("ui/initialize", { appInfo: { name: "mcp-projector", version: __VERSION__ }, appCapabilities: {}, protocolVersion: "2026-01-26" });
   applyHost(init?.hostContext);
   notify("ui/notifications/initialized");
   await new Promise((r) => setTimeout(r, 0));

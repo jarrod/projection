@@ -1,6 +1,6 @@
 # Recipes
 
-Patterns for `mcp-projection` 0.3, written against the task-server shape below and exercised with `testUi`. Adapt names to the server you're working on. Imports come from `"mcp-projection"`.
+Patterns for `mcp-projector` 0.3, written against the task-server shape below and exercised with `testUi`. Adapt names to the server you're working on. Imports come from `"mcp-projector"`.
 
 Common shape used in the snippets:
 
@@ -316,7 +316,7 @@ const Usage = async () => {
 Use tokens so dark mode keeps working. `css` is unlayered and wins over the kit.
 
 ```ts
-import { defineUi, themes } from "mcp-projection";
+import { defineUi, themes } from "mcp-projector";
 
 defineUi({ ..., css: `
   .lane { min-height: 120px; padding: 8px; border: 1px dashed var(--p-line-2); border-radius: var(--p-r); }
@@ -329,7 +329,7 @@ defineUi({ ..., css: themes.terminal + `:root { --p-ok: #7bd88f }` });
 
 ## 15. Web mode deployments
 
-A local server needs none of this: without `origin`, projection serves the UI on 127.0.0.1 itself. The forms below are for serving it yourself, and need `defineUi({ web: { origin } })`. `origin` is what the browser uses, not the bind address.
+A local server needs none of this: without `origin`, projector serves the UI on 127.0.0.1 itself. The forms below are for serving it yourself, and need `defineUi({ web: { origin } })`. `origin` is what the browser uses, not the bind address.
 
 **stdio server with a side port** (one process, so state and writes are shared):
 

@@ -10,7 +10,7 @@ Every UI adds one tool the model can see, `open_<name>_in_browser`, whose descri
 
 ## Local servers: nothing to set up
 
-With no `origin`, projection serves the UI itself on `127.0.0.1` at a free port, so links work for a person on the same machine. That covers stdio servers run by a local agent. A request that arrives over the network from another host is refused with "Set web.origin" rather than given a link that can't work.
+With no `origin`, projector serves the UI itself on `127.0.0.1` at a free port, so links work for a person on the same machine. That covers stdio servers run by a local agent. A request that arrives over the network from another host is refused with "Set web.origin" rather than given a link that can't work.
 
 ## Hosted servers: give the origin
 
@@ -27,13 +27,13 @@ http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);
 ## Turning it off
 
 - `web: { tool: false }` keeps web mode but adds no tool: links come only from your own `ui.openInBrowser` calls.
-- `web: false` turns web mode off. The UI is then reachable only through apps that support MCP Apps, which projection hasn't been tested in.
+- `web: false` turns web mode off. The UI is then reachable only through apps that support MCP Apps, which projector hasn't been tested in.
 
 ## The link
 
 - It works once, for two minutes by default.
 - Opening it shows a Continue page, so link previews in chat apps can't use it up. Pressing Continue sets a session cookie.
-- It signs the browser in without asking for anything else. The MCP spec says servers shouldn't send links like this. Projection does it on purpose, so that people never have to sign in, and keeps the risk small by making the link single-use, short-lived and redeemable only from its own page.
+- It signs the browser in without asking for anything else. The MCP spec says servers shouldn't send links like this. Projector does it on purpose, so that people never have to sign in, and keeps the risk small by making the link single-use, short-lived and redeemable only from its own page.
 
 ## The session
 

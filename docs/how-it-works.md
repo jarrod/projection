@@ -1,6 +1,6 @@
 # How it works
 
-An MCP server has two audiences: the model, which calls tools, and the people working with it. Projection gives the people a live view of the same server, using the same tools, without changing anything the model sees.
+An MCP server has two audiences: the model, which calls tools, and the people working with it. Projector gives the people a live view of the same server, using the same tools, without changing anything the model sees.
 
 ## Three ideas
 
@@ -18,7 +18,7 @@ An MCP server has two audiences: the model, which calls tools, and the people wo
 ## One update
 
 1. The agent calls `add_note`. Your handler runs and returns as usual.
-2. Projection bumps a change counter. The agent doesn't wait for the UI.
+2. Projector bumps a change counter. The agent doesn't wait for the UI.
 3. Each open page is waiting on `p_sync`. They wake up, and the view runs once per distinct user and params.
 4. If the HTML changed, the page receives it and updates in place, matching elements by `id` and briefly highlighting changed rows.
 

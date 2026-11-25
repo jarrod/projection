@@ -17,7 +17,7 @@ npm install github:jarrod/projector
 ## 2. Write `src/ui.ts`
 
 ```ts
-import { defineUi, html, Header, Table, Button } from "mcp-projection";
+import { defineUi, html, Header, Table, Button } from "mcp-projector";
 import { store } from "./store.js";
 
 export const ui = defineUi({
@@ -45,7 +45,7 @@ Wrap the server where you create it, before any tool is registered:
 const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 ```
 
-That's the whole integration. Your tools, schemas and results don't change; projection adds one tool, `open_notes_in_browser`.
+That's the whole integration. Your tools, schemas and results don't change; projector adds one tool, `open_notes_in_browser`.
 
 ## 4. See it
 
@@ -56,7 +56,7 @@ A server people reach over the network needs one more setting: see [Web mode](we
 To look at it without an agent, render a static page:
 
 ```bash
-npx mcp-projection preview dist/ui.js > preview.html
+npx mcp-projector preview dist/ui.js > preview.html
 ```
 
 ## 5. Test it
@@ -64,7 +64,7 @@ npx mcp-projection preview dist/ui.js > preview.html
 `testUi` runs your server as an agent and as a host, with no browser. It needs a `createServer()` factory that builds and returns the server.
 
 ```js
-import { testUi } from "mcp-projection/testing";
+import { testUi } from "mcp-projector/testing";
 import { createServer } from "./dist/server.js";
 
 const t = await testUi(createServer);
@@ -77,16 +77,16 @@ view.close(); await t.close(); process.exit();          // exit: a pending poll 
 
 ## Have an agent do it
 
-The [`mcp-projection` skill](../skills/mcp-projection/SKILL.md) walks an agent through all of the steps above.
+The [`mcp-projector` skill](../skills/mcp-projector/SKILL.md) walks an agent through all of the steps above.
 
-**Claude Code:** install it as a plugin, then ask Claude to add Projection to your server.
+**Claude Code:** install it as a plugin, then ask Claude to add Projector to your server.
 
 ```
 /plugin marketplace add jarrod/projector
-/plugin install mcp-projection@projection
+/plugin install mcp-projector@projector
 ```
 
-**Codex:** add the marketplace, then install `mcp-projection` from the plugin list.
+**Codex:** add the marketplace, then install `mcp-projector` from the plugin list.
 
 ```bash
 codex plugin marketplace add jarrod/projector
@@ -95,11 +95,11 @@ codex plugin marketplace add jarrod/projector
 **Any agent, after `npm install`:** copy the skill into the folder your agent reads skills from. Claude Code reads `.claude/skills/`, and Codex reads `.agents/skills/`.
 
 ```bash
-mkdir -p .claude/skills && cp -r node_modules/mcp-projection/skills/mcp-projection .claude/skills/
+mkdir -p .claude/skills && cp -r node_modules/mcp-projector/skills/mcp-projector .claude/skills/
 ```
 
 ```bash
-mkdir -p .agents/skills && cp -r node_modules/mcp-projection/skills/mcp-projection .agents/skills/
+mkdir -p .agents/skills && cp -r node_modules/mcp-projector/skills/mcp-projector .agents/skills/
 ```
 
 ## Next

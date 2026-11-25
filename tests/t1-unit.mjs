@@ -1,6 +1,6 @@
 const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-const { testUi } = await import(`${NS}/node_modules/mcp-projection/dist/testing.js`);
-const { defineUi, html } = await import(`${NS}/node_modules/mcp-projection/dist/index.js`);
+const { testUi } = await import(`${NS}/node_modules/mcp-projector/dist/testing.js`);
+const { defineUi, html } = await import(`${NS}/node_modules/mcp-projector/dist/index.js`);
 const { McpServer } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js`);
 const { createServer } = await import(`${NS}/dist/server.js`);
 let fails = 0;
@@ -98,7 +98,7 @@ ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops
   ok(await redeem({ "sec-fetch-site": "cross-site" }) === 403 && await redeem({ origin: "https://evil.example" }) === 403, "another site cannot redeem a link into this browser");
   ok(await redeem({ "sec-fetch-site": "same-origin", origin: "http://localhost:3911" }) === 303, "the Continue page itself still redeems it");
 
-  // web mode is on by default: a default tool, and without an origin projection serves the UI on 127.0.0.1 itself
+  // web mode is on by default: a default tool, and without an origin projector serves the UI on 127.0.0.1 itself
   const plain = async (opts) => {
     const d = defineUi({ name: "my notes", view: () => html`<p>local</p>`, ...opts });
     const s = d.attach(new McpServer({ name: "d", version: "1" }));
@@ -138,7 +138,7 @@ ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops
   ok(/No user id/.test(await err(() => anon.identify({}))), "identity: an identify() that returns nothing is refused, not mapped to a shared user");
   ok(/must return html/.test(await err(() => defineUi({ name: "v", view: () => ({ __html: "<script>" }) }).render())), "a view that returns a hand-built { __html } object is refused");
   ok(/<\/style/.test(await err(() => defineUi({ name: "c", css: "</style><script>", view: () => html`x` }))), "css that would close the style element is refused");
-  const { attrs, Menu } = await import(`${NS}/node_modules/mcp-projection/dist/index.js`);
+  const { attrs, Menu } = await import(`${NS}/node_modules/mcp-projector/dist/index.js`);
   ok(attrs({ "x onmouseover=alert(1) y": "1", ok: "1" }).__html === ' ok="1"', "attrs drops a name that would start a second attribute");
   ok(!/javascript:/.test(Menu({ id: "m", items: [{ label: "x", href: "javascript:alert(1)" }, { label: "y", href: "https://example.com" }] }).__html), "Menu drops a javascript: href");
 

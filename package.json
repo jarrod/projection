@@ -1,5 +1,5 @@
 {
-  "name": "mcp-projection",
+  "name": "mcp-projector",
   "version": "0.3.0",
   "description": "Bolt a live, styled human UI onto any MCP server. No framework.",
   "scripts": {
@@ -51,7 +51,7 @@
     }
   },
   "bin": {
-    "mcp-projection": "bin/mcp-projection.mjs"
+    "mcp-projector": "bin/mcp-projector.mjs"
   },
   "engines": {
     "node": ">=20"

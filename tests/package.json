@@ -1,5 +1,5 @@
 {
-  "name": "projection-tests",
+  "name": "projector-tests",
   "private": true,
   "type": "module",
   "scripts": {

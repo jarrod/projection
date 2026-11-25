@@ -1,10 +1,10 @@
-# mcp-projection: for coding agents
+# mcp-projector: for coding agents
 
 The MCP server is the app, and agents do the work through its tools. This library gives people a live view of it. A `view` function on the server returns HTML, and every button in it calls one of the server's own tools. A person gets to the view through a single-use link the agent sends with `open_<name>_in_browser`.
 
 ## Integrate
 
-For the full walkthrough, follow the skill in `skills/mcp-projection/SKILL.md`. In short:
+For the full walkthrough, follow the skill in `skills/mcp-projector/SKILL.md`. In short:
 
 ```ts
 // src/ui.ts: all UI code lives in this one file
@@ -29,14 +29,14 @@ const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 
 ## Check
 
-Test with `testUi` from `mcp-projection/testing`: it drives the server as an agent and as a viewer, with no browser. The example is in `docs/getting-started.md`.
+Test with `testUi` from `mcp-projector/testing`: it drives the server as an agent and as a viewer, with no browser. The example is in `docs/getting-started.md`.
 
 ## Where to look
 
 | Need | File |
 |---|---|
 | Components, props and options | The types in `src/ui/components.ts`, `src/ui.ts` and `src/web.ts` |
-| Patterns: queues, filters, paging, detail views | `skills/mcp-projection/references/recipes.md` |
-| From a symptom to its fix | `skills/mcp-projection/references/troubleshooting.md` |
+| Patterns: queues, filters, paging, detail views | `skills/mcp-projector/references/recipes.md` |
+| From a symptom to its fix | `skills/mcp-projector/references/troubleshooting.md` |
 | Links, sessions, hosting | `docs/web-mode.md` |
 | What changed between versions | `CHANGELOG.md` |
