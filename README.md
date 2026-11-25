@@ -1,19 +1,22 @@
 # mcp-projection
 
-Add a live, styled UI for humans to any MCP server without bringing a web framework into it.
+A live UI for the people working alongside your agents. Add it to any MCP server without changing its tools.
 
-- **Agent side unchanged.** Tools, schemas and results are byte-for-byte the same. The UI adds one helper tool, hidden from the model.
-- **One function and one changed line.** Write a `view` in `ui.ts`, then change `new McpServer(...)` to `ui.attach(new McpServer(...))`.
-- **Live with nothing to declare.** After any tool call, by the agent or the human, open UIs render again and only the changed rows update and highlight.
-- **Humans use the agent's tools.** A click makes the same `tools/call` the agent makes: same validation, same handler.
-- **No sign-in.** The viewer is the MCP user. On a URL, the session is delegated from MCP through a single-use link the agent hands over.
-- **Stateless and small.** The server keeps no per-viewer state. About 2.5 KB gzipped of browser JavaScript plus 3.6 KB of CSS. No dependencies beyond the MCP SDK and zod your server already has.
-
-![Notes example, light](docs/screenshots/shot-light.png)
-
-```
-npm install && npm test        # build, example server, unit + MCP-host tests
-npm run test:web               # real Chrome via playwright-core (needs port 3000 free)
+```ts
+const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 ```
 
-Start with [Getting started](docs/getting-started.md), then [Building a UI](docs/building-a-ui.md), [How it works](docs/how-it-works.md) and [Web mode](docs/web-mode.md). Coding agents: read [AGENTS.md](./AGENTS.md). See `examples/notes-server` for a minimal integration.
+- **Same tools.** Nothing the agent sees changes, except one added tool: `open_<name>_in_browser`.
+- **Live.** Every tool call updates every open view.
+- **No sign-in.** The agent hands over a single-use link.
+- **Small.** About 2.5 KB of JavaScript, no new dependencies.
+
+## Docs
+
+[Getting started](docs/getting-started.md) · [Building a UI](docs/building-a-ui.md) · [How it works](docs/how-it-works.md) · [Web mode](docs/web-mode.md) · [AGENTS.md](AGENTS.md) · [Example](examples/notes-server/src/ui.ts)
+
+## Develop
+
+```bash
+npm install && npm test
+```

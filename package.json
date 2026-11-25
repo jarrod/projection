@@ -24,6 +24,7 @@
     "dist",
     "bin",
     "AGENTS.md",
+    "CHANGELOG.md",
     "README.md",
     "skills",
     "docs/*.md"
