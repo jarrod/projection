@@ -24,7 +24,7 @@ For example: "Open on `list_notes`, watch only" or "Open on `list_notes`, with `
 Use the target project's package manager and keep its existing Projection dependency if present. For npm:
 
 ```bash
-npm install github:jarrod/projection
+npm install github:jarrod/projector
 ```
 
 If the Git install leaves the package without built exports, check out the same source revision in a temporary directory and run `npm ci` and `npm pack` there. Install the tarball printed by `npm pack` from the target project.

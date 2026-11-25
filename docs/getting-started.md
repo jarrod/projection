@@ -11,7 +11,7 @@ You need a long-lived Node server built on `McpServer` from the MCP TypeScript S
 ## 1. Install
 
 ```bash
-npm install github:jarrod/projection
+npm install github:jarrod/projector
 ```
 
 ## 2. Write `src/ui.ts`
@@ -82,14 +82,14 @@ The [`mcp-projection` skill](../skills/mcp-projection/SKILL.md) walks an agent t
 **Claude Code:** install it as a plugin, then ask Claude to add Projection to your server.
 
 ```
-/plugin marketplace add jarrod/projection
+/plugin marketplace add jarrod/projector
 /plugin install mcp-projection@projection
 ```
 
 **Codex:** add the marketplace, then install `mcp-projection` from the plugin list.
 
 ```bash
-codex plugin marketplace add jarrod/projection
+codex plugin marketplace add jarrod/projector
 ```
 
 **Any agent, after `npm install`:** copy the skill into the folder your agent reads skills from. Claude Code reads `.claude/skills/`, and Codex reads `.agents/skills/`.
