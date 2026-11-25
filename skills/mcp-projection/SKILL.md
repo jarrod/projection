@@ -1,6 +1,6 @@
 ---
 name: mcp-projection
-description: Install mcp-projection and add a basic MCP Apps UI to an existing Node.js MCP server. Use when asked to set up Projection, or to add a UI, dashboard, admin panel or live view to an MCP server's existing tools, or when the code mentions defineUi or ui.attach.
+description: Add mcp-projection to an existing Node.js MCP server, so people can open a live view of it in their browser and use its tools from there. Use when asked to set up Projection, or to add a UI, dashboard, admin panel or live view to an MCP server's existing tools, or when the code mentions defineUi or ui.attach.
 ---
 
 # Set up a basic Projection UI

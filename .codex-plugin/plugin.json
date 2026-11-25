@@ -1,0 +1,5 @@
+{
+  "name": "mcp-projection",
+  "description": "Add a live, in-browser view to an existing Node.js MCP server, so people can see and act on what its tools do.",
+  "skills": "./skills/"
+}

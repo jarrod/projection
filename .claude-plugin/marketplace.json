@@ -1,0 +1,8 @@
+{
+  "name": "projection",
+  "owner": { "name": "jarrod" },
+  "description": "The mcp-projection skill for Claude Code.",
+  "plugins": [
+    { "name": "mcp-projection", "source": "./", "description": "Add a live, in-browser view to an existing Node.js MCP server, so people can see and act on what its tools do." }
+  ]
+}

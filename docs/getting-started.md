@@ -1,6 +1,6 @@
 # Getting started
 
-Add a live UI to an existing MCP server. You write one file and change one line. To have an agent do it, give it the skill in [`skills/mcp-projection`](../skills/mcp-projection/SKILL.md).
+Add a live UI to an existing MCP server. You write one file and change one line. To have an agent do it, [install the skill](#have-an-agent-do-it).
 
 ![The notes example](screenshots/shot-light.png)
 
@@ -73,6 +73,33 @@ await t.agent.callTool({ name: "add_note", arguments: { title: "Hello", body: ""
 await view.until((text) => text.includes("Hello"));   // the agent's change shows up
 await view.click("pin_note", { id: 1 });               // a person's click works
 view.close(); await t.close(); process.exit();          // exit: a pending poll can hold Node open
+```
+
+## Have an agent do it
+
+The [`mcp-projection` skill](../skills/mcp-projection/SKILL.md) walks an agent through all of the steps above.
+
+**Claude Code:** install it as a plugin, then ask Claude to add Projection to your server.
+
+```
+/plugin marketplace add jarrod/projection
+/plugin install mcp-projection@projection
+```
+
+**Codex:** add the marketplace, then install `mcp-projection` from the plugin list.
+
+```bash
+codex plugin marketplace add jarrod/projection
+```
+
+**Any agent, after `npm install`:** copy the skill into the folder your agent reads skills from. Claude Code reads `.claude/skills/`, and Codex reads `.agents/skills/`.
+
+```bash
+mkdir -p .claude/skills && cp -r node_modules/mcp-projection/skills/mcp-projection .claude/skills/
+```
+
+```bash
+mkdir -p .agents/skills && cp -r node_modules/mcp-projection/skills/mcp-projection .agents/skills/
 ```
 
 ## Next

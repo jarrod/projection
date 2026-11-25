@@ -15,6 +15,8 @@ const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 
 [Getting started](docs/getting-started.md) · [Building a UI](docs/building-a-ui.md) · [How it works](docs/how-it-works.md) · [Web mode](docs/web-mode.md) · [AGENTS.md](AGENTS.md) · [Example](examples/notes-server/src/ui.ts)
 
+Using Claude Code or Codex? [Install the skill](docs/getting-started.md#have-an-agent-do-it) and ask your agent to add it.
+
 ## Develop
 
 ```bash
