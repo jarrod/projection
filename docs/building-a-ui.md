@@ -6,7 +6,7 @@ What to know once the first view works.
 
 Start from the person, not the tool list. Ask what they need to understand in five seconds (usually what exists, what state it's in and what changed), and what is faster to do by hand than by asking the agent. Those few things become buttons. Everything else stays with the agent.
 
-Pick one tool for `attachTo`, usually the main list or status tool.
+Pick one tool for `attachTo`, usually the main list or status tool. It only matters to apps that support MCP Apps, which projection hasn't been tested in.
 
 ## The view
 
@@ -20,6 +20,19 @@ view: ({ user, params }) => html`...`
 - Params can be anything, so read them carefully: `String(params.q ?? "")`.
 - Return `html`, and don't let the view throw. A throwing view shows that viewer nothing.
 - Split a big view into plain functions that return `html`.
+
+## Components
+
+Each component is a function that returns `html`. Children go in as extra arguments: `Card({ title: "Tasks" }, Table(...))`. Hover one in your editor for its props, or read [`components.ts`](../src/ui/components.ts).
+
+| Kind | Components | Use them for |
+|---|---|---|
+| Layout | `Stack`, `Row`, `Grid`, `Card`, `Header`, `Separator` | Arranging the page. `Grid` of `Stat` for an overview; `Card({ flush: true })` around a table |
+| Data | `Table`, `Stat`, `Badge`, `Dot`, `Empty`, `Skeleton` | Lists, counts, status and empty states |
+| Controls | `Button`, `Form`, `Input`, `Textarea`, `Select`, `Checkbox` | Calling tools (`tool`) or changing params (`set`) |
+| Overlays | `Dialog`, `Close`, `Menu`, `Tabs` | Confirms, create forms, row menus, switching views. All work without JavaScript |
+| Text | `Muted`, `Mono`, `Kbd`, `Icon` | Quieter text, ids and numbers, shortcuts, icons |
+| Theme | `ThemeToggle` | Letting the viewer pick light or dark outside a host |
 
 ## Writing HTML
 
@@ -75,7 +88,7 @@ A few rules that keep it readable:
 - One primary button per view.
 - Small ghost icon buttons in table rows, each with a `label`.
 - Empty states say how to fill them: "No tasks yet. Ask your assistant to add one."
-- Check it at 420 px wide. Hosts often show it in a narrow column.
+- Check it at 420 px wide, for narrow windows.
 
 ## More
 

@@ -8,8 +8,9 @@ import type { SyncState, SyncResult } from "./ui.js";
 import { esc } from "./html.js";
 
 export type WebOptions = {
-  /** Public origin, e.g. "https://app.example.com" or "http://localhost:3000". */
-  origin: string;
+  /** Public origin the browser uses, e.g. "https://app.example.com". Without it, the UI is served on this machine only
+   *  (127.0.0.1, a free port) by a listener projection starts itself. */
+  origin?: string;
   /** Mount path. Default "/ui". */
   base?: string;
   /** Seconds a link stays redeemable. Default 120. */
@@ -29,7 +30,7 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export function createWeb(d: Deps, opts: WebOptions) {
   const base = (opts.base ?? "/ui").replace(/\/$/, "");
   const linkTtl = (opts.linkTtl ?? 120) * 1000, sessionTtl = (opts.sessionTtl ?? 3600) * 1000;
-  const secure = opts.origin.startsWith("https:");
+  let origin = opts.origin ?? "", up: Promise<void> | undefined, srv: any;
   const links = new Map<string, Grant>();     // sha256(token) → grant (tokens are never stored)
   const sessions = new Map<string, Grant>();  // sha256(sid) → grant
   const assetTag = hash(d.css + d.runtime).slice(0, 10), name = esc(d.name);
@@ -74,11 +75,11 @@ export function createWeb(d: Deps, opts: WebOptions) {
       if (req.method !== "POST") return res(null, 405);
       // Only our own Continue page may redeem: another site must not sign this browser in to someone else's session.
       const site = req.headers.get("sec-fetch-site"), from = req.headers.get("origin");
-      if (site ? site !== "same-origin" : from && from !== opts.origin) return res(null, 403);
+      if (site ? site !== "same-origin" : from && from !== origin) return res(null, 403);
       links.delete(k);
       const sid = id(), exp = Math.min(Date.now() + sessionTtl, g.until);
       sessions.set(hash(sid), { ...g, exp });
-      return res(null, 303, { Location: `${base}/`, "Set-Cookie": `p_s=${sid}; Path=${base || "/"}; HttpOnly; SameSite=Lax; Max-Age=${Math.floor((exp - Date.now()) / 1000)}${secure ? "; Secure" : ""}` });
+      return res(null, 303, { Location: `${base}/`, "Set-Cookie": `p_s=${sid}; Path=${base || "/"}; HttpOnly; SameSite=Lax; Max-Age=${Math.floor((exp - Date.now()) / 1000)}${origin.startsWith("https:") ? "; Secure" : ""}` });
     }
 
     const g = session(req);
@@ -114,14 +115,12 @@ export function createWeb(d: Deps, opts: WebOptions) {
     } catch { return json({ error: "error" }, 500); } // a tool's own error text is returned above; internal failures are not described
   }
 
-  return {
-    fetch,
-    /** Node http adapter: http.createServer((req, res) => site.node(req, res, next?)). Compresses with brotli or gzip.
-     *  `fetch` leaves compression to the platform (Cloudflare, Deno Deploy and most CDNs do it). */
-    async node(req: any, res: any, next?: () => void) {
+  /** Node http adapter: http.createServer((req, res) => site.node(req, res, next?)). Compresses with brotli or gzip.
+   *  `fetch` leaves compression to the platform (Cloudflare, Deno Deploy and most CDNs do it). */
+  async function node(req: any, res: any, next?: () => void) {
       // Requests outside the mount path are passed on untouched: their body is not read here.
       let pathname = "";
-      try { pathname = new URL(req.url, opts.origin).pathname; } catch {}
+      try { pathname = new URL(req.url, origin).pathname; } catch {}
       if (!owns(pathname)) return next ? next() : (res.statusCode = 404, res.end());
       try {
         const chunks: Buffer[] = [];
@@ -133,7 +132,7 @@ export function createWeb(d: Deps, opts: WebOptions) {
         // A viewer that goes away (closed tab, superseded poll) releases its held sync at once.
         const gone = new AbortController();
         res.on("close", () => gone.abort());
-        const r = await fetch(new Request(new URL(req.url, opts.origin), {
+        const r = await fetch(new Request(new URL(req.url, origin), {
           method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined, signal: gone.signal,
         }));
         if (!r) return next ? next() : (res.statusCode = 404, res.end());
@@ -148,15 +147,25 @@ export function createWeb(d: Deps, opts: WebOptions) {
         if (!res.headersSent) res.writeHead(500);
         res.end();
       }
-    },
+  }
+
+  return {
+    fetch,
+    node,
+    /** Without an origin, start serving on 127.0.0.1 at a free port (once). The listener never keeps the process alive. */
+    listen: () => up ??= origin ? Promise.resolve() : import("node:http").then((h) => new Promise<void>((ok, fail) => {
+      srv = h.createServer((q, r) => node(q, r)).on("error", fail);
+      srv.listen(0, "127.0.0.1", () => { origin = `http://127.0.0.1:${srv.address().port}`; srv.unref(); ok(); });
+    })),
     /** Mint a single-use link. Use ui.link(extra, server), which binds it to the MCP request's user, auth and server. */
     link(user: string, call: Call, until?: number) {
+      if (!origin) throw new Error("The web UI is still starting.");
       const t = id();
       links.set(hash(t), { user, call, exp: Date.now() + linkTtl, until: until || Infinity });
-      return `${opts.origin}${base}/l/${t}`;
+      return `${origin}${base}/l/${t}`;
     },
     /** End every link and browser session for a user (e.g. when their MCP session ends). */
     revoke(user: string) { for (const m of [links, sessions]) for (const [k, g] of m) if (g.user === user) m.delete(k); },
-    close: () => clearInterval(sweep),
+    close: () => { clearInterval(sweep); srv?.close(); },
   };
 }

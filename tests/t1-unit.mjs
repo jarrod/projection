@@ -87,6 +87,23 @@ ok(/cancelled/.test(await held) && Date.now() - t0 < 1000, "a cancelled sync sto
   ok(await redeem({ "sec-fetch-site": "cross-site" }) === 403 && await redeem({ origin: "https://evil.example" }) === 403, "another site cannot redeem a link into this browser");
   ok(await redeem({ "sec-fetch-site": "same-origin", origin: "http://localhost:3911" }) === 303, "the Continue page itself still redeems it");
 
+  // web mode is on by default: a default tool, and without an origin projection serves the UI on 127.0.0.1 itself
+  const plain = async (opts) => {
+    const d = defineUi({ name: "my notes", view: () => html`<p>local</p>`, ...opts });
+    const s = d.attach(new McpServer({ name: "d", version: "1" }));
+    const [pa, pb] = InMemoryTransport.createLinkedPair(); await s.connect(pb);
+    const pc = new Client({ name: "plain", version: "1" }); await pc.connect(pa);   // no elicitation: the link comes back as text
+    return { d, names: (await pc.listTools()).tools.map((t) => t.name), call: (n) => pc.callTool({ name: n, arguments: {} }) };
+  };
+  const on = await plain({});
+  ok(on.names.includes("open_my_notes_in_browser"), "web mode is on by default, with a default open-in-browser tool");
+  const local = (await on.call("open_my_notes_in_browser")).content[0].text.match(/http\S+/)[0];
+  ok(/^http:\/\/127\.0\.0\.1:\d+\/ui\/l\//.test(local) && (await fetch(local)).status === 200, "without an origin the link points at a listener on 127.0.0.1 that serves it");
+  on.d.site.close();
+  ok(!(await plain({ web: false })).names.some((n) => n.includes("browser")), "web: false turns web mode off");
+  const noTool = await plain({ web: { tool: false } });
+  ok(!noTool.names.some((n) => n.includes("browser")) && noTool.d.site, "tool: false keeps web mode but adds no model-visible tool");
+
   ok(w.identify({}) === "local" && w.identify({ authInfo: { clientId: "app", extra: { sub: "u1" } } }) === "u1", "identity: no auth is local, otherwise the token's subject");
   ok(/extra\.sub/.test(await err(() => w.identify({ authInfo: { clientId: "app" } }))), "identity: an authenticated request with no subject is refused, not mapped to the client id");
   ok(/attached server/.test(await err(() => w.link({}))) && /attached server/.test(await err(() => w.openInBrowser({}))), "ui.link and ui.openInBrowser need the server the request belongs to");

@@ -22,7 +22,7 @@ import { store } from "./store.js";
 
 export const ui = defineUi({
   name: "notes",
-  attachTo: ["list_notes"],     // the UI opens when the agent calls this tool
+  attachTo: ["list_notes"],     // for apps that support MCP Apps (untested)
   view: ({ user }) => html`
     ${Header({ title: "Notes" })}
     ${Table({
@@ -45,11 +45,15 @@ Wrap the server where you create it, before any tool is registered:
 const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 ```
 
-That's the whole integration. Your tools, schemas and results don't change.
+That's the whole integration. Your tools, schemas and results don't change; projection adds one tool, `open_notes_in_browser`.
 
 ## 4. See it
 
-In an MCP Apps host (Claude, ChatGPT, VS Code), ask the agent to list your notes. Or render a static page:
+Ask your agent to show you the notes UI. It calls `open_notes_in_browser`, and you get a single-use link that opens the UI in your browser.
+
+A server people reach over the network needs one more setting: see [Web mode](web-mode.md#hosted-servers-give-the-origin).
+
+To look at it without an agent, render a static page:
 
 ```bash
 npx mcp-projection preview dist/ui.js > preview.html

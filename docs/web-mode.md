@@ -1,23 +1,33 @@
 # Web mode
 
-Web mode serves the same UI on a normal URL, for people who want it open in a tab. There is no sign-in. The agent hands the person a single-use link, and the browser then acts as that MCP user.
+Web mode serves the same UI on a normal URL. It's on by default, because in apps that can't draw UIs (Claude Code, for one) it's the only way a person sees it. There is no sign-in: the agent hands the person a single-use link, and the browser then acts as that MCP user.
 
 ![The link's Continue page](screenshots/shot-gate.png)
 
-## Set it up
+## What the agent sees
+
+Every UI adds one tool the model can see, `open_<name>_in_browser`, whose description says to use it when the person wants to see or change things themselves. When called, it asks the client to open the link, so the link doesn't pass through the model. Clients that can't do that get the link back as text, with instructions to share it. To send a link from one of your own tools instead, call `ui.openInBrowser(extra, { server })`.
+
+## Local servers: nothing to set up
+
+With no `origin`, projection serves the UI itself on `127.0.0.1` at a free port, so links work for a person on the same machine. That covers stdio servers run by a local agent.
+
+## Hosted servers: give the origin
+
+A server people reach over the network needs its public address, and requests routed to the UI:
 
 ```ts
-export const ui = defineUi({
-  name: "notes", view,
-  web: { origin: "https://app.example.com", tool: "open_notes_in_browser" },
-});
+export const ui = defineUi({ name: "notes", view, web: { origin: "https://app.example.com" } });
 
 http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);
 // Express: app.use((req, res, next) => ui.site!.node(req, res, next)), at the root, before body parsers
 // Fetch runtimes: await ui.site!.fetch(request), which returns null outside its path
 ```
 
-`web.tool` adds one tool the model can see. When called, it asks the host to open the link, so the link doesn't pass through the model. Hosts that can't do that get the link as text. To send a link from one of your own tools instead, call `ui.openInBrowser(extra, { server })`.
+## Turning it off
+
+- `web: { tool: false }` keeps web mode but adds no tool: links come only from your own `ui.openInBrowser` calls.
+- `web: false` turns web mode off. The UI is then reachable only through apps that support MCP Apps, which projection hasn't been tested in.
 
 ## The link
 

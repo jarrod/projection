@@ -11,9 +11,9 @@ An MCP server has two audiences: the model, which calls tools, and the people wo
 ## What `attach` adds
 
 - A `ui://` resource holding the page shell: CSS and a small runtime.
-- `_meta.ui.resourceUri` on the `attachTo` tools, which tells hosts to show the UI.
+- `_meta.ui.resourceUri` on the `attachTo` tools, for apps that support the MCP Apps extension. Not yet tested in any such app.
 - A tool called `p_sync`, hidden from the model, that the page polls.
-- Optionally, one model-visible tool for [web mode](web-mode.md), if you ask for it.
+- One model-visible tool, `open_<name>_in_browser`, that sends the person a link to the UI ([web mode](web-mode.md)).
 
 ## One update
 

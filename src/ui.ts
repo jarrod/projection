@@ -36,12 +36,15 @@ export type UiOptions = {
   identify?: (extra: any) => string;
   /** Override the ui:// URI. */
   uri?: string;
-  /** Also serve the UI on a normal URL, gated by single-use links. Serve it with ui.site.fetch / ui.site.node. */
-  web?: WebOptions & {
-    /** Register a model-visible tool with this name that opens the UI in the user's browser (URL elicitation, link fallback). */
-    tool?: string;
+  /** The same UI on a normal URL, reached through single-use links. On by default. Without `origin` it is served on this
+   *  machine only (127.0.0.1, a free port); for a hosted server give `origin` and serve ui.site.node or ui.site.fetch there.
+   *  `false` turns web mode off. */
+  web?: false | (WebOptions & {
+    /** Model-visible tool that opens the UI in the user's browser (URL elicitation, link fallback).
+     *  Default `open_<name>_in_browser`; `false` for none. */
+    tool?: string | false;
     toolDescription?: string;
-  };
+  });
 };
 
 /** The part of an MCP request's `extra` that this library reads. */
@@ -72,6 +75,8 @@ export function defineUi(o: UiOptions) {
   const css = (o.bare ? "" : CSS) + (o.css ?? "");
   if (/<\/style/i.test(css)) throw new Error("css must not contain </style");
   const calls = new WeakMap<object, ToolCall>();
+  const w = o.web === false ? undefined : o.web ?? {};
+  const tool = w && w.tool !== false ? w.tool ?? `open_${o.name.replace(/[^\w-]/g, "_")}_in_browser` : undefined;
 
   // ---- change signal: one counter, and the viewers waiting for it to move ----
   // Starts at a random point so two instances behind one load balancer never hold the same number by accident.
@@ -158,25 +163,27 @@ export function defineUi(o: UiOptions) {
       ? "This @modelcontextprotocol/sdk version is not supported: tools/call handler not recognised."
       : "ui.attach(server) must be called before any tool is registered on the server.");
 
-    if (o.web?.tool) server.registerTool(o.web.tool, {
-      description: o.web.toolDescription ?? `Open the ${o.name} UI in the user's web browser with a private, single-use link.`,
+    site?.listen().catch(() => {}); // a failure surfaces when a link is asked for
+    if (tool) server.registerTool(tool, {
+      description: w!.toolDescription ?? `Show the ${o.name} UI to the user in their web browser, so they can see and work with it themselves. ` +
+        `Use it when the user wants to view, review or change things by hand. Sends a private, single-use link; no sign-in.`,
     }, async (extra: Extra) => {
       const r = await openInBrowser(extra, { server });
       return text(r.opened ? `Opened ${o.name} in the user's browser.`
         : r.declined ? "The user declined to open the browser."
-        : `Share this private link with the user. It works once and expires in ${o.web!.linkTtl ?? 120} seconds: ${r.url}`);
+        : `Share this private link with the user. It works once and expires in ${w!.linkTtl ?? 120} seconds: ${r.url}`);
     });
 
     return server;
   }
 
-  const site = o.web ? createWeb({ name: o.name, css, runtime: WEB, sync }, o.web) : undefined;
+  const site = w ? createWeb({ name: o.name, css, runtime: WEB, sync }, w) : undefined;
 
   /** Mint a single-use web link for the user behind an MCP request. The browser session acts as that user:
    *  its tool calls carry the same authInfo and run on `server` (the attached McpServer handling this request), and it ends when that auth expires. */
   function link(extra: Extra, server: object) {
     const call = server && calls.get(server);
-    if (!site || !call) throw new Error("ui.link(extra, server) needs defineUi({ web: { origin } }) and the attached server.");
+    if (!site || !call) throw new Error("ui.link(extra, server) needs web mode (not web: false) and the attached server.");
     // A browser session must not mint links: it could renew itself for ever, and prompt the user's host at will.
     if (extra?.[FROM_WEB]) throw new Error("Not available from the web UI.");
     const authInfo = extra?.authInfo;
@@ -191,6 +198,7 @@ export function defineUi(o: UiOptions) {
   /** From inside a tool handler: ask the host to open the web UI for this user (URL elicitation), or get a link to show.
    *  `server` is the attached McpServer handling this request. */
   async function openInBrowser(extra: Extra, opts: { message?: string; server: ServerLike }) {
+    await site?.listen();
     const url = link(extra, opts?.server);
     const s = opts.server.server;
     if (s?.getClientCapabilities?.()?.elicitation?.url) {
@@ -211,7 +219,7 @@ export function defineUi(o: UiOptions) {
       return `<!doctype html><html${opts.theme ? ` data-theme="${opts.theme}"` : ""}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style></head><body>${await render(params, opts.user)}</body></html>`;
     },
     sync,
-    /** Web site (when defineUi({ web }) is set): fetch handler, Node adapter, revoke(). */
+    /** Web site (unless web: false): fetch handler, Node adapter, revoke(). */
     site,
     link,
     openInBrowser,

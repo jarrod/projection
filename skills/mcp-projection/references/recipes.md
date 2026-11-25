@@ -329,7 +329,7 @@ defineUi({ ..., css: themes.terminal + `:root { --p-ok: #7bd88f }` });
 
 ## 15. Web mode deployments
 
-All forms need `defineUi({ web: { origin } })`. `origin` is what the browser uses, not the bind address.
+A local server needs none of this: without `origin`, projection serves the UI on 127.0.0.1 itself. The forms below are for serving it yourself, and need `defineUi({ web: { origin } })`. `origin` is what the browser uses, not the bind address.
 
 **stdio server with a side port** (one process, so state and writes are shared):
 

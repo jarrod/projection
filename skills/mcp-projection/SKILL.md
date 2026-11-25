@@ -74,4 +74,4 @@ Every tool call refreshes the UI. If data also changes outside tools (a cron job
 
 Run the project's usual build or type check. If a test MCP Apps host is available, call the opening tool and check the expected data and controls. For errors or a UI that doesn't update, see [troubleshooting](references/troubleshooting.md).
 
-Tell the caller which tool opens the UI and which actions are available.
+Tell the caller which actions are available, and that they can ask the agent to show the UI in their browser (`open_<name>_in_browser`). A server reached over the network needs `web: { origin }` and its HTTP routed to `ui.site.node`; a local one needs nothing.

@@ -1,6 +1,6 @@
 # mcp-projection: notes for coding agents
 
-Add a live, styled UI for humans to an existing MCP server. The UI shows up in MCP Apps hosts (Claude, ChatGPT, VS Code) and, optionally, on a normal URL. Agent-facing tools, schemas and results stay unchanged.
+Add a live, styled UI for humans to an existing MCP server. A person opens it in their browser through a single-use link the agent sends (web mode, on by default). It is also offered to apps that support MCP Apps, which is untested. Agent-facing tools, schemas and results stay unchanged.
 
 ## How it works
 - **UI = f(user, params).** One `view` function on the server returns HTML. Nothing renders in the browser.
@@ -16,7 +16,7 @@ import { store } from "./store.js";
 
 export const ui = defineUi({
   name: "notes",
-  attachTo: ["list_notes"],                               // tools whose results open the UI in hosts
+  attachTo: ["list_notes"],                               // for apps that support MCP Apps (untested)
   view: ({ user, params }) => {
     const notes = store.list(user).filter((n) => n.title.includes(params.q ?? ""));
     return html`
@@ -59,12 +59,15 @@ Overlays: `Dialog` + `Button({ opens: id })` + `Close(id)`, `Menu({ id, items })
 Theme: `ThemeToggle()` (system / light / dark, pure CSS, hidden in hosts that set a theme)
 Tones: `neutral ok warn bad info`. Icons: `plus check x more chevron down search trash pin external refresh sun moon monitor`.
 
-## Web mode (optional): same UI on a URL
+## Web mode (on by default): same UI on a URL
+- Every UI adds one model-visible tool, `open_<name>_in_browser`, that sends the person a single-use link. No sign-in: the link delegates the MCP user to a browser session. `ui.openInBrowser(extra, { server })` does the same from your own handler.
+- Local servers need nothing: without `origin`, projection serves the UI on 127.0.0.1 at a free port.
+- Hosted servers give the public origin and route requests to the UI:
 ```ts
-defineUi({ ..., web: { origin: "https://app.example.com", tool: "open_notes_in_browser" } });
+defineUi({ ..., web: { origin: "https://app.example.com" } });
 http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or: ui.site!.fetch(request)
 ```
-- No sign-in. A single-use link delegates the MCP user to a browser session. `web.tool` adds one model-visible tool that sends the link; `ui.openInBrowser(extra, { server })` does it from your own handler.
+- `web: { tool: false }` keeps web mode without the tool; `web: false` turns it off.
 - The link is a pre-authenticated URL, which the MCP elicitation spec says servers must not send. This is deliberate; `docs/web-mode.md` says what bounds it.
 - Call `ui.site!.revoke(user)` when the user signs out or their MCP session ends.
 
@@ -73,6 +76,9 @@ http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or: 
 - A change on one instance reaches viewers on another only when their poll times out (up to 25 s).
 - Every write renders the view once per distinct (user, params) being watched. Keep views small: page large tables (about 200 rows).
 - ESM only. Supported Node and SDK versions are in `package.json` (`engines`, `peerDependencies`).
+
+## Unreleased
+- Web mode is on by default. Every UI adds `open_<name>_in_browser` (rename with `web.tool`, drop with `tool: false`, turn web mode off with `web: false`). Without `origin`, the UI is served on 127.0.0.1 at a free port.
 
 ## Changed in 0.3
 - `ui.link(extra, server)` and `ui.openInBrowser(extra, { server })` need the attached server.
