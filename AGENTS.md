@@ -78,7 +78,9 @@ http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or: 
 - ESM only. Supported Node and SDK versions are in `package.json` (`engines`, `peerDependencies`).
 
 ## Unreleased
-- Web mode is on by default. Every UI adds `open_<name>_in_browser` (rename with `web.tool`, drop with `tool: false`, turn web mode off with `web: false`). Without `origin`, the UI is served on 127.0.0.1 at a free port.
+- Web mode is on by default. Every UI adds `open_<name>_in_browser` (rename with `web.tool`, drop with `tool: false`, turn web mode off with `web: false`). Without `origin`, the UI is served on 127.0.0.1 at a free port; a request from a non-loopback host then fails with "Set web.origin" instead of getting a link that can't work.
+- `p_sync` is listed only to clients that announce MCP Apps (`io.modelcontextprotocol/ui`), so a plain client's model never sees it. Calls still work.
+- If URL elicitation fails or times out, `open_<name>_in_browser` returns the link as text instead of an error.
 
 ## Changed in 0.3
 - `ui.link(extra, server)` and `ui.openInBrowser(extra, { server })` need the attached server.

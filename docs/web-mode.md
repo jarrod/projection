@@ -6,11 +6,11 @@ Web mode serves the same UI on a normal URL. It's on by default, because in apps
 
 ## What the agent sees
 
-Every UI adds one tool the model can see, `open_<name>_in_browser`, whose description says to use it when the person wants to see or change things themselves. When called, it asks the client to open the link, so the link doesn't pass through the model. Clients that can't do that get the link back as text, with instructions to share it. To send a link from one of your own tools instead, call `ui.openInBrowser(extra, { server })`.
+Every UI adds one tool the model can see, `open_<name>_in_browser`, whose description says to use it when the person wants to see or change things themselves. When called, it asks the client to open the link, so the link doesn't pass through the model. Clients that can't do that, or whose prompt fails or times out, get the link back as text, with instructions to share it. To send a link from one of your own tools instead, call `ui.openInBrowser(extra, { server })`.
 
 ## Local servers: nothing to set up
 
-With no `origin`, projection serves the UI itself on `127.0.0.1` at a free port, so links work for a person on the same machine. That covers stdio servers run by a local agent.
+With no `origin`, projection serves the UI itself on `127.0.0.1` at a free port, so links work for a person on the same machine. That covers stdio servers run by a local agent. A request that arrives over the network from another host is refused with "Set web.origin" rather than given a link that can't work.
 
 ## Hosted servers: give the origin
 

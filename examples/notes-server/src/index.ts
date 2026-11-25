@@ -5,4 +5,5 @@ import { ui } from "./ui.js";
 
 await createServer().connect(new StdioServerTransport());
 
-if (process.env.UI_PORT) http((req, res) => ui.site!.node(req, res)).listen(+process.env.UI_PORT);
+// Hosted: UI_ORIGIN is the public origin, and this process serves the UI on UI_PORT behind it.
+if (process.env.UI_ORIGIN) http((req, res) => ui.site!.node(req, res)).listen(+(process.env.UI_PORT ?? 3000));

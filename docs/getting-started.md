@@ -69,7 +69,7 @@ import { createServer } from "./dist/server.js";
 
 const t = await testUi(createServer);
 const view = await t.mount();
-await t.agent.callTool({ name: "add_note", arguments: { title: "Hello" } });
+await t.agent.callTool({ name: "add_note", arguments: { title: "Hello", body: "" } });
 await view.until((text) => text.includes("Hello"));   // the agent's change shows up
 await view.click("pin_note", { id: 1 });               // a person's click works
 view.close(); await t.close(); process.exit();          // exit: a pending poll can hold Node open

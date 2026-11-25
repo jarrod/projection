@@ -5,7 +5,7 @@ export const ui = defineUi({
   name: "notes",
   attachTo: ["list_notes"],
   css: themes.terminal,
-  web: { origin: process.env.UI_ORIGIN ?? "http://localhost:3000", tool: "open_notes_in_browser" },
+  web: { origin: process.env.UI_ORIGIN }, // unset: projection serves the UI itself on 127.0.0.1
   view: ({ user, params }) => {
     const q = String(params.q ?? "").toLowerCase();
     const notes = store.list(user).filter((n) => n.title.toLowerCase().includes(q));

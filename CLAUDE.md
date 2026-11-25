@@ -1,6 +1,6 @@
 # projection
 
-Library: `mcp-projection`. It adds a live, styled UI for humans to an MCP server without changing agent-facing tools.
+Library: `mcp-projection`. It adds a live, styled UI for humans to an MCP server. Existing tools, schemas and results never change; it adds one model-visible tool, `open_<name>_in_browser` (none with `web: false` or `web: { tool: false }`).
 
 - **Read `AGENTS.md` first.** It has the rules, the components and the two-step integration. The full API is the documented types in `src/`; human docs are in `docs/`.
 - Layout: library in `src/` (`ui.ts` core and MCP attach, `web.ts` web mode, `ui/` components and CSS) and `src/client/` (browser runtime, bundled into `dist/assets.js` by `build.mjs`). Example integration in `examples/notes-server/`. End-to-end tests in `tests/`.

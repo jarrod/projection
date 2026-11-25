@@ -27,8 +27,9 @@ const budget = {
   "kit CSS (tokens + kit)": [CSS, 4000],
   // The server budget is a guard on complexity, not on delivery: this code never reaches a browser.
   // Raised 7000 -> 7500 for the identity, link-redemption and adapter checks from the security review,
-  // then -> 8000 for shared renders, the per-session poll limit and input validation from the engineering review.
-  "server library (never sent to browser)": [server, 8000] };
+  // then -> 8000 for shared renders, the per-session poll limit and input validation from the engineering review,
+  // then -> 8100 for the web-by-default review: link fallback, remote-without-origin check, p_sync hidden from plain clients.
+  "server library (never sent to browser)": [server, 8100] };
 let over = false;
 console.log("\nsize (min+gzip)                     bytes   budget");
 for (const [k, [s, b]] of Object.entries(budget)) { const n = gz(s); over ||= n > b; console.log(`${k.padEnd(34)} ${String(n).padStart(6)}   ${b}${n > b ? "  OVER" : ""}`); }

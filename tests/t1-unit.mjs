@@ -11,7 +11,17 @@ const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.
 const t = await testUi(createServer);
 ok(t.resourceUri === "ui://notes/app.html", "resource discovered from list_notes");
 ok(t.modelTools.map((x) => x.name).sort().join() === "add_note,list_notes,open_notes_in_browser,pin_note", "model sees its own tools + the opt-in browser tool only");
-ok(t.tools.length - t.modelTools.length === 1, "one hidden helper tool (p_sync)");
+ok(!t.tools.some((x) => x.name === "p_sync"), "p_sync is not listed for a client without MCP Apps");
+{
+  const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
+  const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
+  const [a, b] = InMemoryTransport.createLinkedPair(); await createServer().connect(b);
+  const app = new Client({ name: "apps-host", version: "1" }, { capabilities: { extensions: { "io.modelcontextprotocol/ui": {} } } });
+  await app.connect(a);
+  const sync = (await app.listTools()).tools.find((x) => x.name === "p_sync");
+  ok(sync?._meta?.ui?.visibility?.[0] === "app", "an MCP Apps client lists p_sync, marked app-only");
+  await app.close();
+}
 const v = await t.mount();
 ok(v.text().includes("No notes yet"), "empty state renders");
 await t.agent.callTool({ name: "add_note", arguments: { title: "Agent note", body: "from the model" } });
@@ -60,9 +70,10 @@ ok(/<li>&lt;b&gt;<\/li>/.test(await defineUi({ name: "e", view: () => html`<li>$
 ok(/Results for \[object Object\]/.test(await defineUi({ name: "e", view: ({ params }) => html`Results for ${params.q}` }).render({ q: { __html: "<img src=x onerror=alert(1)>" } })),
   "a JSON { __html } value is escaped, not trusted as HTML");
 t0 = Date.now();
-const gone = new AbortController(), held = err(() => ui.sync("alice", after, 5000, gone.signal));
+const gone = new AbortController(), held = ui.sync("alice", after, 5000, gone.signal);
 gone.abort();
-ok(/cancelled/.test(await held) && Date.now() - t0 < 1000, "a cancelled sync stops waiting and does not render");
+const H = await held;
+ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops waiting, does not render and answers 'nothing new'");
 
 // --- web mode: Node adapter and session limits ---
 {
@@ -93,13 +104,29 @@ ok(/cancelled/.test(await held) && Date.now() - t0 < 1000, "a cancelled sync sto
     const s = d.attach(new McpServer({ name: "d", version: "1" }));
     const [pa, pb] = InMemoryTransport.createLinkedPair(); await s.connect(pb);
     const pc = new Client({ name: "plain", version: "1" }); await pc.connect(pa);   // no elicitation: the link comes back as text
-    return { d, names: (await pc.listTools()).tools.map((t) => t.name), call: (n) => pc.callTool({ name: n, arguments: {} }) };
+    return { d, s, names: (await pc.listTools()).tools.map((t) => t.name), call: (n) => pc.callTool({ name: n, arguments: {} }) };
   };
   const on = await plain({});
   ok(on.names.includes("open_my_notes_in_browser"), "web mode is on by default, with a default open-in-browser tool");
   const local = (await on.call("open_my_notes_in_browser")).content[0].text.match(/http\S+/)[0];
   ok(/^http:\/\/127\.0\.0\.1:\d+\/ui\/l\//.test(local) && (await fetch(local)).status === 200, "without an origin the link points at a listener on 127.0.0.1 that serves it");
+  const asHost = (host) => new Promise((done) => import("node:http").then((h) => h.get(local.replace(/\/l\/.*/, "/x"), { headers: { host } }, (r) => { r.resume(); done(r.statusCode); })));
+  ok(await asHost("evil.example") === 421 && await asHost(new URL(local).host) === 401, "the 127.0.0.1 listener refuses a request naming another Host (DNS rebinding)");
+  const remote = (host) => err(() => on.d.openInBrowser({ requestInfo: { headers: { host } } }, { server: on.s }));
+  ok(/web\.origin/.test(await remote("app.example.com")) && await remote("localhost:8080") === "", "a remote request with no origin is refused instead of getting a 127.0.0.1 link; a loopback one is not");
   on.d.site.close();
+  ok(/still starting/.test(await err(() => on.d.link({}, on.s))), "after close, no links point at the closed listener");
+  {
+    const { ElicitRequestSchema } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js`);
+    const d = defineUi({ name: "el", view: () => html`<p>x</p>` }), es = d.attach(new McpServer({ name: "d", version: "1" }));
+    const [ea, eb] = InMemoryTransport.createLinkedPair(); await es.connect(eb);
+    const ec = new Client({ name: "el", version: "1" }, { capabilities: { elicitation: { url: {} } } });
+    ec.setRequestHandler(ElicitRequestSchema, async () => { throw new Error("host gave up"); });
+    await ec.connect(ea);
+    const text = (await ec.callTool({ name: "open_el_in_browser", arguments: {} })).content[0].text;
+    ok(/Share this private link.*http:\/\/127\.0\.0\.1/.test(text), "when URL elicitation fails, the tool hands back the link instead of an error");
+    d.site.close();
+  }
   ok(!(await plain({ web: false })).names.some((n) => n.includes("browser")), "web: false turns web mode off");
   const noTool = await plain({ web: { tool: false } });
   ok(!noTool.names.some((n) => n.includes("browser")) && noTool.d.site, "tool: false keeps web mode but adds no model-visible tool");
@@ -140,8 +167,9 @@ ok(/cancelled/.test(await held) && Date.now() - t0 < 1000, "a cancelled sync sto
   ok((await post("/tool/p_sync")).status === 404, "p_sync is not reachable as a web tool call: sync has its own route");
   const cur = await w.sync("local");
   const gate = new AbortController(), polls = Array.from({ length: 9 }, () =>
-    w.site.fetch(new Request("http://localhost:3911/ui/sync", { method: "POST", headers: { cookie, "P-Req": "1" }, body: JSON.stringify(cur), signal: gate.signal })).then((r) => r.status));
-  ok(await Promise.race([polls[0], new Promise((r) => setTimeout(r, 500, "held"))]) === 500, "a ninth held poll on one browser session ends the oldest");
+    w.site.fetch(new Request("http://localhost:3911/ui/sync", { method: "POST", headers: { cookie, "P-Req": "1" }, body: JSON.stringify(cur), signal: gate.signal })).then(async (r) => [r.status, await r.json()]));
+  const [st, js] = await Promise.race([polls[0], new Promise((r) => setTimeout(r, 500, ["held"]))]);
+  ok(st === 200 && js.v === cur.v && !js.html, "a ninth held poll on one browser session ends the oldest, which answers 'nothing new'");
   gate.abort(); await Promise.allSettled(polls);
 
 

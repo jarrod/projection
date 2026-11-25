@@ -4,6 +4,7 @@ const NS = new URL("../examples/notes-server", import.meta.url).pathname;
 const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
 const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
 const { ElicitRequestSchema } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js`);
+process.env.UI_ORIGIN ??= "http://localhost:3000"; // this file serves ui.site.node there
 const { createServer } = await import(`${NS}/dist/server.js`);
 const { ui } = await import(`${NS}/dist/ui.js`);
 

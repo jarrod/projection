@@ -112,7 +112,8 @@ export function defineUi(o: UiOptions) {
       waiting.add(done);
       signal?.addEventListener("abort", done);
     });
-    if (signal?.aborted) throw new Error("cancelled"); // the viewer left or asked again: don't render for nobody
+    // The viewer left, or a newer poll took its place: don't render for nobody, just say "nothing new".
+    if (signal?.aborted) return { v: s.v!, h: s.h! };
     const v = version, { h, html } = await shared(user, s.params);
     return h === s.h ? { v, h } : { v, h, html };
   }
@@ -142,6 +143,8 @@ export function defineUi(o: UiOptions) {
       }));
       else if (m === "tools/list") h = async (req, extra) => {
         const r = await next(req, extra);
+        // p_sync is for the UI runtime. A client without MCP Apps would show it to the model, so it is left out there (calls still work).
+        if (!inner.getClientCapabilities?.()?.extensions?.["io.modelcontextprotocol/ui"]) r.tools = r.tools.filter((t: any) => t.name !== SYNC);
         for (const t of r.tools) {
           t.annotations?.readOnlyHint ? readOnly.add(t.name) : readOnly.delete(t.name);
           if (o.attachTo?.includes(t.name)) t._meta = { ...t._meta, ui: { ...t._meta?.ui, resourceUri: uri } };
@@ -165,6 +168,7 @@ export function defineUi(o: UiOptions) {
 
     site?.listen().catch(() => {}); // a failure surfaces when a link is asked for
     if (tool) server.registerTool(tool, {
+      annotations: { readOnlyHint: true },
       description: w!.toolDescription ?? `Show the ${o.name} UI to the user in their web browser, so they can see and work with it themselves. ` +
         `Use it when the user wants to view, review or change things by hand. Sends a private, single-use link; no sign-in.`,
     }, async (extra: Extra) => {
@@ -183,7 +187,7 @@ export function defineUi(o: UiOptions) {
    *  its tool calls carry the same authInfo and run on `server` (the attached McpServer handling this request), and it ends when that auth expires. */
   function link(extra: Extra, server: object) {
     const call = server && calls.get(server);
-    if (!site || !call) throw new Error("ui.link(extra, server) needs web mode (not web: false) and the attached server.");
+    if (!site || !call) throw new Error("ui.link needs web mode and the attached server.");
     // A browser session must not mint links: it could renew itself for ever, and prompt the user's host at will.
     if (extra?.[FROM_WEB]) throw new Error("Not available from the web UI.");
     const authInfo = extra?.authInfo;
@@ -198,14 +202,17 @@ export function defineUi(o: UiOptions) {
   /** From inside a tool handler: ask the host to open the web UI for this user (URL elicitation), or get a link to show.
    *  `server` is the attached McpServer handling this request. */
   async function openInBrowser(extra: Extra, opts: { message?: string; server: ServerLike }) {
+    // Over the network with no origin set, a 127.0.0.1 link would only work on the server's own machine.
+    const host = (extra as any)?.requestInfo?.headers?.host;
+    if (!w?.origin && host && !/^(localhost|127\.|\[::1)/.test(host)) throw new Error("Set web.origin: this user is remote.");
     await site?.listen();
     const url = link(extra, opts?.server);
     const s = opts.server.server;
-    if (s?.getClientCapabilities?.()?.elicitation?.url) {
+    if (s?.getClientCapabilities?.()?.elicitation?.url) try {
       const r = await s.elicitInput({ mode: "url", message: opts.message ?? `Open ${o.name} in your browser`, url, elicitationId: crypto.randomUUID() },
         { relatedRequestId: extra?.requestId });
       return { opened: r.action === "accept", declined: r.action !== "accept", url };
-    }
+    } catch {} // timed out or failed: hand back the link instead
     return { opened: false, declined: false, url };
   }
 

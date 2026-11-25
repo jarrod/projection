@@ -30,7 +30,7 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export function createWeb(d: Deps, opts: WebOptions) {
   const base = (opts.base ?? "/ui").replace(/\/$/, "");
   const linkTtl = (opts.linkTtl ?? 120) * 1000, sessionTtl = (opts.sessionTtl ?? 3600) * 1000;
-  let origin = opts.origin ?? "", up: Promise<void> | undefined, srv: any;
+  let origin = opts.origin ?? "", host = "", up: Promise<void> | undefined, srv: any;
   const links = new Map<string, Grant>();     // sha256(token) → grant (tokens are never stored)
   const sessions = new Map<string, Grant>();  // sha256(sid) → grant
   const assetTag = hash(d.css + d.runtime).slice(0, 10), name = esc(d.name);
@@ -105,6 +105,7 @@ export function createWeb(d: Deps, opts: WebOptions) {
         req.signal.addEventListener("abort", () => poll.abort());
         try {
           // Same shape the MCP path validates: params is an object or nothing.
+          // An evicted poll answers "nothing new" (see sync), so its tab asks again without backing off.
           return json(await d.sync(g.user, { h: body?.h, v: body?.v, params: p && typeof p === "object" && !Array.isArray(p) ? p : {} }, undefined, poll.signal));
         } finally { polls.delete(poll); }
       }
@@ -118,45 +119,46 @@ export function createWeb(d: Deps, opts: WebOptions) {
   /** Node http adapter: http.createServer((req, res) => site.node(req, res, next?)). Compresses with brotli or gzip.
    *  `fetch` leaves compression to the platform (Cloudflare, Deno Deploy and most CDNs do it). */
   async function node(req: any, res: any, next?: () => void) {
-      // Requests outside the mount path are passed on untouched: their body is not read here.
-      let pathname = "";
-      try { pathname = new URL(req.url, origin).pathname; } catch {}
-      if (!owns(pathname)) return next ? next() : (res.statusCode = 404, res.end());
-      try {
-        const chunks: Buffer[] = [];
-        let size = 0;
-        if (req.method !== "GET" && req.method !== "HEAD") for await (const c of req) {
-          if ((size += c.length) > MAX_BODY) { res.writeHead(413, { Connection: "close" }); return res.end(); }
-          chunks.push(c);
-        }
-        // A viewer that goes away (closed tab, superseded poll) releases its held sync at once.
-        const gone = new AbortController();
-        res.on("close", () => gone.abort());
-        const r = await fetch(new Request(new URL(req.url, origin), {
-          method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined, signal: gone.signal,
-        }));
-        if (!r) return next ? next() : (res.statusCode = 404, res.end());
-        const h = Object.fromEntries(r.headers), ae = String(req.headers["accept-encoding"] ?? "");
-        let body: Buffer = Buffer.from(await r.arrayBuffer());
-        const enc = body.length < 1024 ? "" : /\bbr\b/.test(ae) ? "br" : /\bgzip\b/.test(ae) ? "gzip" : "";
-        if (enc) { body = await (enc === "br" ? br(body, { params: { [zc.BROTLI_PARAM_QUALITY]: 5 } }) : gz(body)); h["content-encoding"] = enc; h.vary = "Accept-Encoding"; }
-        res.writeHead(r.status, h);
-        res.end(body);
-      } catch {
-        // Never let a bad request (unsupported method, malformed header) or a failed render reject: that would end the process.
-        if (!res.headersSent) res.writeHead(500);
-        res.end();
+    // Requests outside the mount path are passed on untouched: their body is not read here.
+    let pathname = "";
+    try { pathname = new URL(req.url, origin).pathname; } catch {}
+    if (!owns(pathname)) return next ? next() : (res.statusCode = 404, res.end());
+    try {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      if (req.method !== "GET" && req.method !== "HEAD") for await (const c of req) {
+        if ((size += c.length) > MAX_BODY) { res.writeHead(413, { Connection: "close" }); return res.end(); }
+        chunks.push(c);
       }
+      // A viewer that goes away (closed tab, superseded poll) releases its held sync at once.
+      const gone = new AbortController();
+      res.on("close", () => gone.abort());
+      const r = await fetch(new Request(new URL(req.url, origin), {
+        method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined, signal: gone.signal,
+      }));
+      if (!r) return next ? next() : (res.statusCode = 404, res.end());
+      const h = Object.fromEntries(r.headers), ae = String(req.headers["accept-encoding"] ?? "");
+      let body: Buffer = Buffer.from(await r.arrayBuffer());
+      const enc = body.length < 1024 ? "" : /\bbr\b/.test(ae) ? "br" : /\bgzip\b/.test(ae) ? "gzip" : "";
+      if (enc) { body = await (enc === "br" ? br(body, { params: { [zc.BROTLI_PARAM_QUALITY]: 5 } }) : gz(body)); h["content-encoding"] = enc; h.vary = "Accept-Encoding"; }
+      res.writeHead(r.status, h);
+      res.end(body);
+    } catch {
+      // Never let a bad request (unsupported method, malformed header) or a failed render reject: that would end the process.
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    }
   }
 
   return {
     fetch,
     node,
-    /** Without an origin, start serving on 127.0.0.1 at a free port (once). The listener never keeps the process alive. */
+    /** Without an origin, start serving on 127.0.0.1 at a free port (once). The listener never keeps the process alive.
+     *  It refuses requests naming another Host (DNS rebinding); a failed start is retried on the next call. */
     listen: () => up ??= origin ? Promise.resolve() : import("node:http").then((h) => new Promise<void>((ok, fail) => {
-      srv = h.createServer((q, r) => node(q, r)).on("error", fail);
-      srv.listen(0, "127.0.0.1", () => { origin = `http://127.0.0.1:${srv.address().port}`; srv.unref(); ok(); });
-    })),
+      srv = h.createServer((q, r) => q.headers.host === host ? node(q, r) : (r.statusCode = 421, r.end())).on("error", fail);
+      srv.listen(0, "127.0.0.1", () => { origin = `http://${host = `127.0.0.1:${srv.address().port}`}`; srv.unref(); ok(); });
+    })).catch((e) => { up = undefined; throw e; }),
     /** Mint a single-use link. Use ui.link(extra, server), which binds it to the MCP request's user, auth and server. */
     link(user: string, call: Call, until?: number) {
       if (!origin) throw new Error("The web UI is still starting.");
@@ -166,6 +168,6 @@ export function createWeb(d: Deps, opts: WebOptions) {
     },
     /** End every link and browser session for a user (e.g. when their MCP session ends). */
     revoke(user: string) { for (const m of [links, sessions]) for (const [k, g] of m) if (g.user === user) m.delete(k); },
-    close: () => { clearInterval(sweep); srv?.close(); },
+    close: () => { clearInterval(sweep); srv?.close(); if (srv) origin = host = "", up = srv = undefined; },
   };
 }
