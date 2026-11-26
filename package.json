@@ -5,11 +5,10 @@
   "scripts": {
     "build": "node build.mjs",
     "prepare": "node build.mjs",
-    "example": "cd examples/notes-server && npm install && npm run build",
-    "test": "npm run build && npm run example && npm run test:snapshot && vitest run --project unit",
+    "test": "pnpm build && pnpm -F notes-server-example build && pnpm test:snapshot && vitest run --project unit",
     "test:snapshot": "node tests/agent-snapshot.mjs examples/notes-server/dist/server.js open_notes_in_browser | diff - tests/baseline.json && echo \"PASS agent-facing tools and results match the baseline\"",
     "test:web": "vitest run --project web",
-    "test:workers": "npm run build && cd examples/cloudflare-worker && npm install && cd ../.. && vitest run --project workers",
+    "test:workers": "pnpm build && vitest run --project workers",
     "test:watch": "vitest --project unit"
   },
   "keywords": [
@@ -48,7 +47,7 @@
     "@modelcontextprotocol/ext-apps": "2.0.4",
     "@modelcontextprotocol/server": "^2.4.0",
     "@types/node": "^26.6.6",
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.28.2",
     "playwright-core": "^1.65.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.12",
@@ -68,11 +67,12 @@
     "mcp-projector": "bin/mcp-projector.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18"
   },
   "sideEffects": false,
   "repository": {
     "type": "git",
     "url": "https://github.com/jarrod/projector.git"
-  }
+  },
+  "packageManager": "pnpm@10.15.1"
 }

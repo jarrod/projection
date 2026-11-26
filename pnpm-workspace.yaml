@@ -1,0 +1,6 @@
+packages:
+  - examples/*
+# Dependencies allowed to run install scripts (pnpm runs none by default).
+onlyBuiltDependencies:
+  - esbuild
+  - workerd

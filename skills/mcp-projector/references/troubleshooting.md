@@ -19,7 +19,7 @@ Find the symptom, check the cause, apply the fix.
 | Browser actions fail with a 500 | `web.mcp` keeps MCP sessions, redirects, or doesn't answer within 30 seconds | Point `web.mcp` at a stateless endpoint that answers directly |
 | The page says "ask the assistant again" | The server refused the agent's token: it expired or was revoked | Expected. Ask the agent to open the UI again |
 | `web.origin must be https` | A plain http origin that isn't localhost | Serve the UI over https: the cookie carries the agent's token |
-| `mcp-projector` imports fail after install | `dist/` wasn't built | Build a tarball and install that: clone the repository, `npm install && npm run build && npm pack`, then `npm install` the `.tgz` |
+| `mcp-projector` imports fail after install | `dist/` wasn't built | Build a tarball and install that: clone the repository, `pnpm install && pnpm pack`, then install the `.tgz` with the project's package manager |
 
 ## Actions
 

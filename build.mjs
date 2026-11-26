@@ -12,8 +12,8 @@ const TOKENS = await css("src/ui/tokens.css"), KIT = await css("src/ui/kit.css")
 const THEMES = Object.fromEntries(await Promise.all(readdirSync("src/ui/themes").filter((f) => f.endsWith(".css")).map(async (f) => [f.slice(0, -4), await css(`src/ui/themes/${f}`)])));
 for (const [n, s] of [["runtime", RUNTIME], ["web", WEB]]) if (/<\/script/i.test(s)) throw new Error(n + " contains </script");
 
-execSync("npx tsc -p tsconfig.json", { stdio: "inherit" });
-execSync("npx tsc -p tsconfig.client.json", { stdio: "inherit" });
+execSync("node_modules/.bin/tsc -p tsconfig.json", { stdio: "inherit" });
+execSync("node_modules/.bin/tsc -p tsconfig.client.json", { stdio: "inherit" });
 mkdirSync("dist", { recursive: true });
 writeFileSync("dist/assets.js", `export const RUNTIME = ${JSON.stringify(RUNTIME)};\nexport const WEB = ${JSON.stringify(WEB)};\nexport const CSS = ${JSON.stringify(CSS)};\nexport const TOKENS = ${JSON.stringify(TOKENS)};\nexport const KIT = ${JSON.stringify(KIT)};\nexport const THEMES = ${JSON.stringify(THEMES)};\n`);
 writeFileSync("dist/assets.d.ts", readFileSync("src/assets.d.ts"));
