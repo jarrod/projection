@@ -5,7 +5,7 @@ Library: `mcp-projector`. It adds a live, styled UI for humans to an MCP server.
 - **Read `AGENTS.md` first.** It has the integration and the gotchas. The full API is the documented types in `src/`; human docs are in `docs/`.
 - Layout: library in `src/` (`ui.ts` core and MCP attach, `web.ts` web mode, `ui/` components and CSS) and `src/client/` (browser runtime, bundled into `dist/assets.js` by `build.mjs`). Example integration in `examples/notes-server/`. End-to-end tests in `tests/`.
 - Build: `npm install && npm run build`. The build fails if a size budget is exceeded. Don't raise a budget without a reason.
-- Test: `npm test` (agent snapshot + unit + MCP host). `npm run test:web` also runs real Chrome via `playwright-core` (uses your installed Chrome, or set `CHROME_PATH`; needs port 3000 free).
+- Test: `npm test` (agent snapshot, then the Vitest `unit` project: `tests/t{1,2,4,5,7}-*.test.mjs`). `npm run test:web` runs real Chrome via `playwright-core` (uses your installed Chrome, or set `CHROME_PATH`; needs port 3000 free). `npm run test:workers` runs the Worker example under `wrangler dev`. In `tests/`: `npx vitest run t5 -t "claim"` runs one file or test, `npm run watch` reruns on change. Child processes get `childEnv()` from `tests/child-env.mjs`, since Vitest sets `DEV` and `NODE_ENV=test`.
 - Dev loop: `node tests/dev.mjs`, then open http://localhost:3000/dev. Edits to `src/` or the example rebuild (about 1 s), restart with seed data, and the open page reloads itself.
 - Invariants:
   - Agent tool results never change. `npm test` diffs `tests/agent-snapshot.mjs` output against `tests/baseline.json`.
