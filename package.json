@@ -3,13 +3,14 @@
   "version": "0.3.0",
   "description": "Bolt a live, styled human UI onto any MCP server. No framework.",
   "scripts": {
-    "build": "node build.mjs",
-    "prepare": "node build.mjs",
-    "test": "pnpm build && pnpm -F notes-server-example build && pnpm test:snapshot && vitest run --project unit",
-    "test:snapshot": "node tests/agent-snapshot.mjs examples/notes-server/dist/server.js open_notes_in_browser | diff - tests/baseline.json && echo \"PASS agent-facing tools and results match the baseline\"",
-    "test:web": "vitest run --project web",
+    "build": "node scripts/build.ts",
+    "prepare": "node scripts/build.ts",
+    "typecheck": "tsc -p tests && tsc -p examples/notes-server --noEmit",
+    "test": "pnpm build && pnpm typecheck && vitest run --project unit",
+    "test:web": "pnpm build && pnpm -F notes-server-example build && vitest run --project web",
     "test:workers": "pnpm build && vitest run --project workers",
-    "test:watch": "vitest --project unit"
+    "test:watch": "vitest --project unit",
+    "dev": "pnpm build && pnpm -F notes-server-example build && node scripts/dev.ts"
   },
   "keywords": [
     "mcp",
@@ -50,7 +51,7 @@
     "esbuild": "^0.28.2",
     "playwright-core": "^1.65.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.12",
+    "vitest": "^5.1.2",
     "zod": "^4.6.7"
   },
   "exports": {

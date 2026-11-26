@@ -1,13 +1,12 @@
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
 
-const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-const { testUi } = await import(`${NS}/node_modules/mcp-projector/dist/testing.js`);
-const { defineUi, html, attrs, Menu } = await import(`${NS}/node_modules/mcp-projector/dist/index.js`);
+import http from "node:http";
+import { testUi } from "mcp-projector/testing";
+import { defineUi, html, attrs, Menu } from "mcp-projector";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
-const { createServer } = await import(`${NS}/dist/server.js`);
-const http = await import("node:http");
-const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
+import { createServer } from "../examples/notes-server/src/server.ts";
+import { err, textOf } from "./helpers.ts";
 const SECRET = "test-secret-test-secret-test-secret-0123";
 // A tool handler's context for an HTTP request that named this Host.
 const from = (host) => ({ http: { req: new Request("http://localhost/mcp", { headers: { host } }) } });
@@ -32,7 +31,7 @@ describe("harness: agent + UI on the real server", () => {
     await app.connect(a);
     try {
       const sync = (await app.listTools()).tools.find((x) => x.name === "p_sync");
-      expect(sync?._meta?.ui?.visibility?.[0]).toBe("app");
+      expect((sync?._meta as any)?.ui?.visibility?.[0]).toBe("app");
     } finally { await app.close(); }
   });
   test("empty state renders", async () => {
@@ -142,7 +141,7 @@ describe("web mode: Node adapter and session limits", () => {
     const pc = new Client({ name: "plain", version: "1" }); await pc.connect(pa); // no elicitation: the link comes back as text
     return { d, s, names: (await pc.listTools()).tools.map((t) => t.name), call: (n) => pc.callTool({ name: n, arguments: {} }) };
   };
-  const status = (opts, body) => new Promise((r) => { const q = http.request({ port: 3911, ...opts }, (res) => { res.resume(); r(res.statusCode); }); q.on("error", () => r(0)); q.end(body); });
+  const status = (opts, body?: string | Buffer) => new Promise((r) => { const q = http.request({ port: 3911, ...opts }, (res) => { res.resume(); r(res.statusCode); }); q.on("error", () => r(0)); q.end(body); });
 
   beforeAll(async () => {
     w = defineUi({ name: "w", web: { origin: "http://localhost:3911", secret: SECRET, tool: "open_w", mcp }, view: ({ params }) => { if (params.boom) throw new Error("boom"); return html`<p>hi</p>`; } });
@@ -208,7 +207,7 @@ describe("web mode: Node adapter and session limits", () => {
       const ec = new Client({ name: "el", version: "1" }, { capabilities: { elicitation: { url: {} } } });
       ec.setRequestHandler("elicitation/create", async () => { throw new Error("host gave up"); });
       await ec.connect(ea);
-      const text = (await ec.callTool({ name: "open_el_in_browser", arguments: {} })).content[0].text;
+      const text = textOf(await ec.callTool({ name: "open_el_in_browser", arguments: {} }));
       expect(text).toMatch(/Share this private link.*http:\/\/127\.0\.0\.1/);
     } finally { d.site.close(); }
   });

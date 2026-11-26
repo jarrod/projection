@@ -2,12 +2,13 @@
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { AppBridge } from "@modelcontextprotocol/ext-apps/app-bridge";
-const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
-const { createServer } = await import(`${NS}/dist/server.js`);
+import { gzipSync } from "node:zlib";
+import { createServer } from "../examples/notes-server/src/server.ts";
+import { connect as connectTo } from "./helpers.ts";
+import { morph } from "../src/client/morph.ts";
 // The DOM updates asynchronously: retry until it holds, for up to 3 s.
 const eventually = (fn) => expect.poll(fn, { timeout: 3000, interval: 15 });
-const connect = async (n) => { const [a, b] = InMemoryTransport.createLinkedPair(); await createServer().connect(b); const c = new Client({ name: n, version: "1" }); await c.connect(a); return c; };
+const connect = (name) => connectTo(createServer(), name);
 
 let agent, hostClient, res, init = false;
 // The DOM is registered only after the Node-side MCP clients exist, as the host would have them.
@@ -19,11 +20,11 @@ beforeAll(async () => {
   GlobalRegistrator.register({ settings: { disableCSSFileLoading: true } });
   document.head.innerHTML = res.text.match(/<head>([\s\S]*?)<\/head>/)[1];
   document.body.innerHTML = '<script type="application/json" id="p-state">{"poll":50}</script>'; // check often, so the test is quick
-  const fakeParent = { postMessage: (m) => queueMicrotask(() => hostSide.onmessage?.(m)) };
+  const fakeParent: any = { postMessage: (m) => queueMicrotask(() => hostSide.onmessage?.(m)) };
   Object.defineProperty(window, "parent", { value: fakeParent, configurable: true });
-  const hostSide = { start: async () => {}, close: async () => {}, send: async (m) => queueMicrotask(() => window.dispatchEvent(new MessageEvent("message", { data: m, source: fakeParent }))) };
+  const hostSide: any = { start: async () => {}, close: async () => {}, send: async (m) => queueMicrotask(() => window.dispatchEvent(new MessageEvent("message", { data: m, source: fakeParent }))) };
   const bridge = new AppBridge(null, { name: "host", version: "1" }, { serverTools: {} }, {
-    hostContext: { theme: "dark", styles: { variables: { "--color-background-primary": "#123456", "--font-sans": "HostSans" } } },
+    hostContext: { theme: "dark", styles: { variables: { "--color-background-primary": "#123456", "--font-sans": "HostSans" } as any } },
   });
   bridge.oncalltool = (p) => hostClient.callTool(p);
   bridge.oninitialized = () => (init = true);
@@ -34,7 +35,7 @@ afterAll(async () => { await GlobalRegistrator.unregister(); });
 
 describe("embedded runtime with the official AppBridge", () => {
   test("shell resource is under 7000 bytes gzipped (CSS + runtime)", async () => {
-    expect((await import("node:zlib")).gzipSync(res.text).length).toBeLessThan(7000);
+    expect(gzipSync(res.text).length).toBeLessThan(7000);
   });
   test("the shell tells the runtime to check every 5 s by default", () => {
     expect(res.text).toMatch(/id="p-state">\{"poll":5000\}</);
@@ -43,7 +44,7 @@ describe("embedded runtime with the official AppBridge", () => {
     await eventually(() => init).toBe(true);
   });
   test("UI mounted", async () => {
-    await eventually(() => document.querySelector(".hdr h1")?.textContent).toBe("Notes");
+    await eventually(() => document.querySelector<HTMLInputElement>(".hdr h1")?.textContent).toBe("Notes");
   });
   test("host theme + CSS variables applied", () => {
     const root = document.documentElement;
@@ -58,20 +59,20 @@ describe("embedded runtime with the official AppBridge", () => {
   // typing in the dialog while an update lands: value + focus survive the morph
   let input;
   test("second agent change arrived", async () => {
-    input = document.querySelector("#new-note input[name=title]");
+    input = document.querySelector<HTMLInputElement>("#new-note input[name=title]");
     input.focus(); input.value = "half-typed";
     await agent.callTool({ name: "add_note", arguments: { title: "Second agent note", body: "" } });
     await eventually(() => document.body.textContent).toContain("Second agent note");
   });
   test("morph kept the same input node, its value and focus", () => {
-    expect(document.querySelector("#new-note input[name=title]")).toBe(input);
+    expect(document.querySelector<HTMLInputElement>("#new-note input[name=title]")).toBe(input);
     expect(input.value).toBe("half-typed");
     expect(document.activeElement).toBe(input);
   });
 
   // a field the user filled in and left is not wiped by an update either
   test("third agent change arrived", async () => {
-    document.querySelector("#new-note textarea[name=body]").focus();
+    document.querySelector<HTMLInputElement>("#new-note textarea[name=body]").focus();
     await agent.callTool({ name: "add_note", arguments: { title: "Third agent note", body: "" } });
     await eventually(() => document.body.textContent).toContain("Third agent note");
   });
@@ -83,7 +84,7 @@ describe("embedded runtime with the official AppBridge", () => {
   // view params: typing in the search box re-renders with { q } and the box keeps focus
   let q;
   test("search box → view params → filtered list", async () => {
-    q = document.querySelector("input[name=q]");
+    q = document.querySelector<HTMLInputElement>("input[name=q]");
     q.focus(); q.value = "second"; q.dispatchEvent(new Event("input", { bubbles: true }));
     await eventually(() => document.querySelectorAll("#notes-all tbody tr").length).toBe(1);
   });
@@ -98,18 +99,18 @@ describe("embedded runtime with the official AppBridge", () => {
 
   // tab selection is client state and survives updates
   test("pinned tab list updated", async () => {
-    document.querySelector("#view-1").checked = true;
+    document.querySelector<HTMLInputElement>("#view-1").checked = true;
     await agent.callTool({ name: "pin_note", arguments: { id: 1 } });
-    await eventually(() => document.querySelector("#notes-pinned tbody")?.textContent ?? "").toContain("Live from agent");
+    await eventually(() => document.querySelector<HTMLInputElement>("#notes-pinned tbody")?.textContent ?? "").toContain("Live from agent");
   });
   test("selected tab survived the update", () => {
-    expect(document.querySelector("#view-1").checked).toBe(true);
+    expect(document.querySelector<HTMLInputElement>("#view-1").checked).toBe(true);
   });
 
   // human clicks pin on row 2 in the All tab
   test("human click → pin_note → row updated", async () => {
-    document.querySelector('#notes-all-2 button[hx-tool="pin_note"]').click();
-    await eventually(() => document.querySelector("#notes-all-2")?.textContent ?? "").toContain("Pinned");
+    document.querySelector<HTMLInputElement>('#notes-all-2 button[hx-tool="pin_note"]').click();
+    await eventually(() => document.querySelector<HTMLInputElement>("#notes-all-2")?.textContent ?? "").toContain("Pinned");
   });
   test("agent sees both pins", async () => {
     const lines = (await agent.callTool({ name: "list_notes", arguments: {} })).content[0].text.split("\n").slice(0, 2);
@@ -119,14 +120,14 @@ describe("embedded runtime with the official AppBridge", () => {
   // form submit through the dialog
   let form;
   test("a second submit while the call is in flight is swallowed, not sent natively", () => {
-    form = document.querySelector("#new-note form");
+    form = document.querySelector<HTMLInputElement>("#new-note form");
     form.querySelector("[name=title]").value = "Made by a human";
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     const again = new Event("submit", { bubbles: true, cancelable: true }); form.dispatchEvent(again);
     expect(again.defaultPrevented).toBe(true);
   });
   test("dialog form → add_note → new row", async () => {
-    await eventually(() => document.querySelector("#notes-all")?.textContent ?? "").toContain("Made by a human");
+    await eventually(() => document.querySelector<HTMLInputElement>("#notes-all")?.textContent ?? "").toContain("Made by a human");
   });
   test("form reset after success", async () => {
     await eventually(() => form.querySelector("[name=title]").value).toBe("");
@@ -137,14 +138,8 @@ describe("embedded runtime with the official AppBridge", () => {
 });
 
 describe("morph on its own: the cases the notes UI cannot reach", () => {
-  let morph;
-  const el = (h) => { const t = document.createElement("template"); t.innerHTML = h; return t.content.firstElementChild; };
+  const el = (h: string): any => { const t = document.createElement("template"); t.innerHTML = h; return t.content.firstElementChild; };
   const mount = (h) => document.body.appendChild(el(h));
-  beforeAll(async () => {
-    const { build } = await import("../node_modules/esbuild/lib/main.js");
-    const js = (await build({ entryPoints: [new URL("../src/client/morph.ts", import.meta.url).pathname], bundle: true, format: "esm", write: false, logLevel: "silent" })).outputFiles[0].text;
-    ({ morph } = await import(/* @vite-ignore */ "data:text/javascript," + encodeURIComponent(js)));
-  });
 
   test("deleting a keyed row moves no other row (focus and open menus survive)", () => {
     const list = mount(`<ul><li id="r1">1</li><li id="r2"><input></li><li id="r3">3</li></ul>`), r2 = list.children[1];

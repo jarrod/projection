@@ -1,18 +1,18 @@
 // Web sign-in with nothing kept on the server: links and session cookies are sealed, and hold the agent's bearer token;
 // single use is web.claim. Every browser request goes to the server's own MCP endpoint (here in process) with that token.
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
-const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-const { defineUi, html } = await import(`${NS}/node_modules/mcp-projector/dist/index.js`);
+import { defineUi, html } from "mcp-projector";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
-const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
+import { err } from "./helpers.ts";
+import http from "node:http";
 
 const O = "https://s.test", SECRET = "test-secret-".repeat(4), now = Date.now;
 let skew = 0; Date.now = () => now() + skew; // a clock the tests can move
 afterAll(() => { Date.now = now; });
 /** Run fn with the clock moved ms ahead; it always moves back, even when a check fails. */
 const later = async (ms, fn) => { skew = ms; try { return await fn(); } finally { skew = 0; } };
-const db = {}, seen = [];
+const db: Record<string, string[]> = {}, seen: any[] = [];
 const as = (sub, more = {}) => ({ http: { authInfo: { token: "bearer-" + sub, clientId: "app", scopes: [], extra: { sub }, ...more } } });
 
 /** The server's MCP endpoint: stateless, with its own bearer check ("bearer-<sub>" is that user's token). */
@@ -22,8 +22,8 @@ const endpoint = (make) => async (req) => {
   return createMcpHandler(make).fetch(req, { authInfo: { token: m[1], clientId: "app", scopes: [], expiresAt: Math.floor(Date.now() / 1000) + 3600, extra: { sub: m[2] } } });
 };
 /** One app: a ui and a server factory, as a serverless integrator would write them. */
-const app = ({ name = "s", web = {} } = {}) => {
-  const a = {};
+const app = ({ name = "s", web = {} }: { name?: string; web?: Record<string, any> } = {}) => {
+  const a: any = {};
   a.ui = defineUi({ name, web: { origin: O, secret: SECRET, mcp: endpoint(() => a.make()), ...web },
     view: async ({ user, call }) => html`<p>${user}: ${(await call("mine")).content[0].text}</p>` });
   a.make = () => {
@@ -145,7 +145,7 @@ describe("a link: one session, once", () => {
 });
 
 describe("claim: only on a POST that passed every other check, and only `true` counts", () => {
-  const calls = []; let answer = true, l;
+  const calls = []; let answer: any = true, l;
   const C = app({ name: "c", web: { claim: async (id, exp) => { calls.push([id, exp]); if (answer === "throw") throw new Error("db down"); return answer; } } });
 
   test("GET never claims", async () => {
@@ -344,7 +344,7 @@ describe("browser sessions run tools as the token's user, through the server's e
 
   // A server without auth on a serverless host: a link from a request without auth, and web.mcp, which gets no Authorization.
   test("no auth with web.mcp: the call goes to web.mcp, with no Authorization header", async () => {
-    const heard = [], N = {};
+    const heard: (string | null)[] = [], N: any = {};
     N.ui = defineUi({ name: "n", web: { origin: O, secret: SECRET, mcp: async (req) => {
       heard.push(req.headers.get("authorization"));
       return createMcpHandler(() => N.ui.attach(new McpServer({ name: "n", version: "1" }))).fetch(req);
@@ -360,7 +360,7 @@ describe("browser sessions run tools as the token's user, through the server's e
 describe("from the security review", () => {
   // The view of a browser session can't call a tool that changes data.
   test("a browser session's view cannot call a tool that changes data", async () => {
-    let pokes = 0; const V = {};
+    let pokes = 0; const V: any = {};
     V.ui = defineUi({ name: "v", view: async ({ call }) => html`<p>${(await call("poke")).content.length}</p>` }); await V.ui.site.listen();
     try {
       V.make = () => { const s = V.ui.attach(new McpServer({ name: "v", version: "1" })); s.registerTool("poke", { description: "write" }, async () => { pokes++; return { content: [] }; }); return s; };
@@ -409,7 +409,7 @@ describe("from the security review", () => {
 describe("each browser request is one call to web.mcp: ended with the browser's request or after 30 s, never redirected", () => {
   const at = (name, mcp) => defineUi({ name, web: { origin: O, secret: SECRET, mcp }, view: ({ user }) => html`<p>${user}</p>` });
   const session = async (u, a = {}) => (await u.site.fetch(new Request(await u.link(a), { method: "POST" }))).headers.get("set-cookie").split(";")[0];
-  const sync = (u, cookie, signal) => u.site.fetch(new Request(`${O}/ui/sync`, { method: "POST", headers: { cookie, "P-Req": "1" }, body: "{}", signal }));
+  const sync = (u, cookie, signal?: AbortSignal) => u.site.fetch(new Request(`${O}/ui/sync`, { method: "POST", headers: { cookie, "P-Req": "1" }, body: "{}", signal }));
 
   // A handler that never answers.
   let got, hc; const H = at("hang", (req) => { got = req; return new Promise(() => {}); });
@@ -449,13 +449,13 @@ describe("each browser request is one call to web.mcp: ended with the browser's 
 
   // A real endpoint that redirects: the request is not followed, so the token never reaches the target.
   test("a web.mcp that redirects fails (500), and the redirect target never sees the bearer token", async () => {
-    const http = await import("node:http"), heardAt = [];
+    const heardAt: (string | undefined)[] = [];
     const target = http.createServer((q, r) => { heardAt.push(q.headers.authorization); r.end(); }).listen(0, "127.0.0.1");
     await new Promise((r) => target.on("listening", r));
-    const hop = http.createServer((q, r) => { r.writeHead(307, { location: `http://127.0.0.1:${target.address().port}/mcp` }); r.end(); }).listen(0, "127.0.0.1");
+    const hop = http.createServer((q, r) => { r.writeHead(307, { location: `http://127.0.0.1:${(target.address() as { port: number }).port}/mcp` }); r.end(); }).listen(0, "127.0.0.1");
     await new Promise((r) => hop.on("listening", r));
     try {
-      const R = at("redir", `http://127.0.0.1:${hop.address().port}/mcp`);
+      const R = at("redir", `http://127.0.0.1:${(hop.address() as { port: number }).port}/mcp`);
       expect((await sync(R, await session(R, as("alice")))).status).toBe(500);
       expect(heardAt).toEqual([]);
     } finally { target.close(); hop.close(); }

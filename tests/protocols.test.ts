@@ -4,13 +4,15 @@ import { describe, test, expect, beforeAll, afterAll } from "vitest";
 import { z } from "zod";
 import { McpServer, createMcpHandler, inputRequired } from "@modelcontextprotocol/server";
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
+import * as projector from "mcp-projector";
+import * as testing from "mcp-projector/testing";
+import { err, textOf } from "./helpers.ts";
 const APPS = { extensions: { "io.modelcontextprotocol/ui": {} } }, URLS = { elicitation: { url: {} } };
-const textOf = (r) => r.content?.[0]?.text ?? "";
 const linkIn = (r) => textOf(r).match(/http\S+/)?.[0];
-const lib = { ...await import("../dist/index.js"), ...await import("../dist/testing.js") };
+const lib = { ...projector, ...testing };
 
-const inMemory = async (make, { capabilities = {}, authInfo, onElicit } = {}) => {
+type Opts = { capabilities?: object; authInfo?: any; onElicit?: (c: Client) => void; host?: string };
+const inMemory = async (make, { capabilities = {}, authInfo, onElicit }: Opts = {}) => {
   const [a, b] = InMemoryTransport.createLinkedPair(), send = a.send.bind(a);
   a.send = (m, o) => send(m, { ...o, authInfo });
   await make().connect(b);
@@ -20,7 +22,7 @@ const inMemory = async (make, { capabilities = {}, authInfo, onElicit } = {}) =>
   return c;
 };
 // A server per request, over HTTP, where each request carries its client's capabilities.
-const http = async (make, { capabilities = {}, authInfo, host = "localhost" } = {}) => {
+const http = async (make, { capabilities = {}, authInfo, host = "localhost" }: Opts = {}) => {
   const handler = createMcpHandler(make), base = `http://${host}/mcp`;
   const c = new Client({ name: "c", version: "1" }, { capabilities, versionNegotiation: { mode: { pin: "2026-07-28" } } });
   await c.connect(new StreamableHTTPClientTransport(new URL(base), { fetch: (u, i) => handler.fetch(new Request(u, i), { authInfo }) }));
@@ -38,9 +40,9 @@ const setup = (modern) => async () => ({ McpServer, endpoint, inputRequired, lib
 // modern decides which checks apply, so it is known before setup runs.
 for (const [label, setup_, modern] of [
   ["server 2.4, 2025 protocol", setup(false), false], ["server 2.4, 2026-07-28", setup(true), true],
-]) describe(label, () => {
+] as const) describe(label, () => {
   let S, defineUi, html, testUi, ui, c, app, alice, last, server, seen;
-  const db = {};
+  const db: Record<string, string[]> = {};
   // The endpoint's bearer check: "t" is u1's token.
   const check = (req) => req.headers.get("authorization") === "Bearer t" && { token: "t", clientId: "app", scopes: [], expiresAt: Math.floor(Date.now() / 1000) + 60, extra: { sub: "u1" } };
   const make = () => {
@@ -55,8 +57,8 @@ for (const [label, setup_, modern] of [
     return s;
   };
   const sub = { token: "t", clientId: "app", scopes: [], expiresAt: Math.floor(Date.now() / 1000) + 60, extra: { sub: "u1" } };
-  const p = async (args, o) => (await app.callTool({ name: "p_sync", arguments: args }, o)).structuredContent;
-  const elicit = (action) => S.connect(make, { capabilities: URLS, onElicit: (cl) => S.onElicit(cl, async (r) => { seen = r.params; if (!action) throw new Error("gave up"); return { action }; }) });
+  const p = async (args, o?) => (await app.callTool({ name: "p_sync", arguments: args }, o)).structuredContent;
+  const elicit = (action?: string) => S.connect(make, { capabilities: URLS, onElicit: (cl) => S.onElicit(cl, async (r) => { seen = r.params; if (!action) throw new Error("gave up"); return { action }; }) });
 
   beforeAll(async () => {
     S = await setup_(); ({ defineUi, html, testUi } = S.lib);
