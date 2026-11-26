@@ -3,9 +3,11 @@ import http from "node:http";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 process.env.UI_ORIGIN ??= "http://localhost:3000"; // this file serves ui.site.node there
 process.env.UI_SECRET ??= "test-only-secret-never-use-in-production-0123";
-// Imported after the env is set: the example reads UI_ORIGIN and UI_SECRET when it loads.
-const { createServer } = await import("../examples/notes-server/dist/server.js");
-const { ui } = await import("../examples/notes-server/dist/ui.js");
+// Imported after the env is set: the example reads UI_ORIGIN and UI_SECRET when it loads. The example's dist/ is a
+// build output (`pnpm -F notes-server-example build`), so the path is a variable: the type check runs without it.
+const EXAMPLE = "../examples/notes-server/dist/";
+const { createServer } = await import(EXAMPLE + "server.js");
+const { ui } = await import(EXAMPLE + "ui.js");
 
 const [a, b] = InMemoryTransport.createLinkedPair();
 await createServer().connect(b);
