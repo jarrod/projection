@@ -10,16 +10,21 @@ Library: `mcp-projector`. It adds a live, styled UI for humans to an MCP server.
 - Invariants:
   - Agent tool results never change. `npm test` diffs `tests/agent-snapshot.mjs` output against `tests/baseline.json`.
   - No client JavaScript beyond the runtime.
-  - The server keeps no per-viewer state: view params live in the browser, and `p_sync` is a pure function of (user, params) plus one change counter.
+  - Projector never adds state or auth context outside the MCP server; it only reflects the MCP server's state and the agent's auth. A person sees the UI only because the agent opened it, and has no identity, account or session of their own.
+  - The browser carries exactly the agent's MCP auth: the agent's bearer token, sealed in the link and cookie, sent with every browser request to the server's own MCP endpoint (`web.mcp`), so the server checks it as it checks the agent. Only the local 127.0.0.1 UI (no `web.origin`) runs browser calls in process; with an origin, `web.mcp` is required and everything fails closed through the server's own auth.
+  - The server keeps nothing between requests: view params live in the browser and `p_sync` renders the view from (user, params) and what its read tools return. The one exception is the default `web.claim`, which remembers used links in the process.
+  - The view reads only by calling read tools (`readOnlyHint` or `reads`). Data changes only through tool calls; projector adds no other path.
   - UI actions go through the server's own `tools/call` handler. Never call a tool handler directly.
-  - No sign-in of its own: identity always comes from MCP `authInfo`.
+  - No sign-in of its own: identity always comes from MCP `authInfo`, as the server's auth gives it.
   - Smallest footprint wins. Adding an option, attribute or component needs a reason.
 
 ## Known gaps
-- Not yet run inside a real host (Claude, ChatGPT, VS Code). Unverified there: that `visibility: ["app"]` is honoured, and that a held `p_sync` call (up to 25 s) is tolerated.
-- With several server instances, a change made on one reaches viewers on another only when their poll times out (up to 25 s). A viewer that moves between instances is answered at once each time, so the runtime paces itself to about one poll a second.
-- Web mode keeps links and sessions in memory: it needs a single instance or sticky routing, and a restart ends every browser session.
-- A browser session is not ended when the MCP connection that made it closes (a per-request server closes after every request, so that cannot be the signal). The integrator calls `ui.site.revoke(user)`.
-- The single-use link is a pre-authenticated URL, which the MCP elicitation spec says servers must not send. Kept on purpose (users never sign in on the web); see `docs/web-mode.md`.
+- Not yet run inside a real host (Claude, ChatGPT, VS Code). Unverified there: that `visibility: ["app"]` is honoured.
+- Pages check every `poll` seconds (default 5), so others' changes take up to that long, and every check runs the view's read tools.
+- The cookie keeps the agent's token until `web.sessionTtl` or the token's expiry. A revoked token is refused by the server on the next request; a refreshed agent token is not passed on, so the browser needs a new link when the old token expires.
+- `web.mcp` must be a stateless MCP endpoint; servers that keep MCP sessions mount one beside their main route. v2 servers that accept only the 2026-07-28 protocol are not supported yet for browser calls.
+- Browser requests reach `web.mcp` from projector, not from the browser: the server must authorise them by token, not by network source.
+- The default `web.claim` is per process: with several instances or on serverless, links are single-use only if the integrator backs `claim` with shared storage.
+- The single-use link is a pre-authenticated URL carrying the agent's token, which the MCP elicitation spec says servers must not send. Kept on purpose: the person acts as the agent and never signs in; see `docs/web-mode.md`.
 - Morph: when an element without an id disappears, the unkeyed siblings after it are rebuilt (an input there loses focus and text). The fix did not fit the runtime budget.
 - The whole view is sent when it changes; very large views would want per-region updates.

@@ -3,12 +3,23 @@
 //   const view = await t.mount();
 //   await t.agent.callTool({ name: "add_note", arguments: { title: "x", body: "" } });
 //   await view.until((text) => text.includes("x"));
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+// The client comes from whichever MCP SDK is installed: v1 (its client can drive a v2 server too), else v2.
+const v1 = await import("@modelcontextprotocol/sdk/client/index.js").catch(() => undefined);
+const { Client, InMemoryTransport }: any = v1
+  ? { ...v1, ...await import("@modelcontextprotocol/sdk/inMemory.js") }
+  // @ts-ignore: an optional peer, not installed here
+  : await import("@modelcontextprotocol/client");
 
+/** The MCP client: `Client` from the installed SDK. */
+type TestClient = {
+  callTool(params: { name: string; arguments?: Record<string, unknown> }, ...options: any[]): Promise<any>;
+  listTools(...options: any[]): Promise<{ tools: any[] }>;
+  close(): Promise<void>;
+  [member: string]: any;
+};
 type Factory = () => { connect(t: any): Promise<void> } | Promise<{ connect(t: any): Promise<void> }>;
 
-async function connect(factory: Factory, name: string) {
+async function connect(factory: Factory, name: string): Promise<TestClient> {
   const [a, b] = InMemoryTransport.createLinkedPair();
   await (await factory()).connect(b);
   const c = new Client({ name, version: "1" });
@@ -28,23 +39,13 @@ export async function testUi(factory: Factory) {
 
   /** Open the UI like a host would, with optional view params. */
   async function mount(params: Record<string, unknown> = {}) {
-    let doc = "", h: string | undefined, v: number | undefined, gen = 0, closed = false, poll: AbortController | undefined;
-    const once = async (g: number) => {
-      const s: any = await host.callTool({ name: "p_sync", arguments: { params, h, v } }, undefined, { signal: poll!.signal });
-      if (s.isError) throw new Error(s.content?.[0]?.text);
-      if (g !== gen || closed) return;
-      const r = s.structuredContent;
-      v = r.v;
-      if (r.html) { h = r.h; doc = r.html; }
-    };
-    /** Render now, then keep following changes (what the runtime does after an action). */
+    let doc = "", h: string | undefined;
+    /** One check, as the runtime makes on its cadence and straight after an action. */
     const refresh = async () => {
-      const g = ++gen;
-      poll?.abort(); // like the runtime: a new poll cancels the one it replaces
-      poll = new AbortController();
-      v = undefined;
-      await once(g);
-      (async () => { while (g === gen && !closed) await once(g).catch(() => { if (g === gen) closed = true; }); })(); // a cancelled poll is not a closed view
+      const s: any = await host.callTool({ name: "p_sync", arguments: { params, h } });
+      if (s.isError) throw new Error(s.content?.[0]?.text);
+      const r = s.structuredContent;
+      if (r.html) { h = r.h; doc = r.html; }
     };
     await refresh();
     return {
@@ -59,13 +60,14 @@ export async function testUi(factory: Factory) {
       },
       /** Change view params the way a `set` control would. */
       async set(p: Record<string, unknown>) { params = { ...params, ...p }; await refresh(); },
-      /** Wait until the visible text matches. */
+      /** Check for changes until the visible text matches (a real page checks every few seconds; this checks at once and often). */
       async until(pred: (text: string, html: string) => boolean, ms = 2000) {
         const t0 = Date.now();
-        while (Date.now() - t0 < ms) { if (pred(textOf(doc), doc)) return; await new Promise((r) => setTimeout(r, 10)); }
+        while (Date.now() - t0 < ms) { await refresh(); if (pred(textOf(doc), doc)) return; await new Promise((r) => setTimeout(r, 10)); }
         throw new Error(`until() timed out. Current UI text: ${textOf(doc).slice(0, 300)}`);
       },
-      close() { closed = true; poll?.abort(); },
+      /** Stop the view. Nothing is held open, so this only exists for symmetry with a real page. */
+      close() {},
     };
   }
 

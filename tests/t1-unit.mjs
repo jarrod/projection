@@ -42,46 +42,41 @@ await v.set({ q: "agent" });
 ok(v.text().includes("Agent note"), "params change again");
 v.close(); other.close(); await t.close();
 
-// --- sync: per-user render, unchanged-skip, wait and wake, never stale ---
+// --- sync: one check, answered at once; HTML only when it changed; nothing kept between checks ---
 const db = { alice: ["a1"], bob: ["b1"] };
-let slow = 0;
-const ui = defineUi({ name: "t", view: async ({ user, params }) => {
-  const items = db[user].slice(); await new Promise((r) => setTimeout(r, slow));
-  return html`<ul>${items.filter((i) => !params.only || i === params.only).map((i) => html`<li>${i}</li>`)}</ul>`;
-} });
+const ui = defineUi({ name: "t", view: async ({ user, params }) =>
+  html`<ul>${db[user].filter((i) => !params.only || i === params.only).map((i) => html`<li>${i}</li>`)}</ul>`, web: false });
 const A = await ui.sync("alice"), B = await ui.sync("bob");
 ok(A.html.includes("a1") && !A.html.includes("b1") && B.html.includes("b1"), "per-user render");
 let t0 = Date.now();
-const idle = await ui.sync("alice", A, 40);
-ok(!idle.html && Date.now() - t0 >= 35, "up to date → waits, then answers with no HTML");
-t0 = Date.now();
-const waitA = ui.sync("alice", A, 5000), waitB = ui.sync("bob", B, 5000);
-db.alice.push("a2"); ui.write();
-const A2 = await waitA, B2 = await waitB;
-ok(A2.html?.includes("a2") && Date.now() - t0 < 1000, "write() wakes a waiting viewer with new HTML");
-ok(!B2.html && B2.v === A2.v, "bob was woken but his HTML did not change: nothing sent");
+const same = await ui.sync("alice", A);
+ok(!same.html && same.h === A.h && Date.now() - t0 < 100, "nothing changed → answers at once, with no HTML");
+db.alice.push("a2");
+const A2 = await ui.sync("alice", A);
+ok(A2.html?.includes("a2") && A2.h !== A.h, "data changed → the next check sends the new HTML");
+ok(!(await ui.sync("bob", B)).html, "bob's view did not change: nothing sent");
 ok((await ui.sync("alice", { h: A2.h, params: { only: "a2" } })).html.includes("<li>a2</li></ul>"), "params are part of the render");
-slow = 40; const during = ui.sync("alice", { h: A2.h }); await new Promise((r) => setTimeout(r, 5));
-db.alice.push("a3"); ui.write(); slow = 0;
-const D = await during, after = await ui.sync("alice", D, 5000);
-ok(after.html?.includes("a3"), "a write during a render is never lost: the next sync answers at once with it");
+const twin = defineUi({ name: "t", view: async ({ user, params }) =>
+  html`<ul>${db[user].filter((i) => !params.only || i === params.only).map((i) => html`<li>${i}</li>`)}</ul>`, web: false });
+ok(!(await twin.sync("alice", A2)).html, "another instance answers a page from the first: nothing is kept between checks");
 ok(/<li>&lt;b&gt;<\/li>/.test(await defineUi({ name: "e", view: () => html`<li>${"<b>"}</li>` }).render()), "render() escapes values");
 
 ok(/Results for \[object Object\]/.test(await defineUi({ name: "e", view: ({ params }) => html`Results for ${params.q}` }).render({ q: { __html: "<img src=x onerror=alert(1)>" } })),
   "a JSON { __html } value is escaped, not trusted as HTML");
-t0 = Date.now();
-const gone = new AbortController(), held = ui.sync("alice", after, 5000, gone.signal);
-gone.abort();
-const H = await held;
-ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops waiting, does not render and answers 'nothing new'");
 
 // --- web mode: Node adapter and session limits ---
 {
   const http = await import("node:http");
-  const w = defineUi({ name: "w", web: { origin: "http://localhost:3911", tool: "open_w" }, view: ({ params }) => { if (params.boom) throw new Error("boom"); return html`<p>hi</p>`; } });
-  const ws = w.attach(new McpServer({ name: "w", version: "1" }));
-  ws.registerTool("peek", { description: "read", annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
-  ws.registerTool("poke", { description: "write" }, async () => ({ content: [] }));
+  const { WebStandardStreamableHTTPServerTransport: WST } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js`);
+  const mk = () => {
+    const ws = w.attach(new McpServer({ name: "w", version: "1" }));
+    ws.registerTool("peek", { description: "read", annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
+    ws.registerTool("poke", { description: "write" }, async () => ({ content: [] }));
+    return ws;
+  };
+  const mcp = async (req) => { const tr = new WST({ sessionIdGenerator: undefined, enableJsonResponse: true }); await mk().connect(tr); return tr.handleRequest(req); };
+  const w = defineUi({ name: "w", web: { origin: "http://localhost:3911", secret: "test-secret-test-secret-test-secret-0123", tool: "open_w", mcp }, view: ({ params }) => { if (params.boom) throw new Error("boom"); return html`<p>hi</p>`; } });
+  const ws = mk();
   const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
   const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
   const [ca, cb] = InMemoryTransport.createLinkedPair();
@@ -110,6 +105,10 @@ ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops
   ok(on.names.includes("open_my_notes_in_browser"), "web mode is on by default, with a default open-in-browser tool");
   const local = (await on.call("open_my_notes_in_browser")).content[0].text.match(/http\S+/)[0];
   ok(/^http:\/\/127\.0\.0\.1:\d+\/ui\/l\//.test(local) && (await fetch(local)).status === 200, "without an origin the link points at a listener on 127.0.0.1 that serves it");
+  const lr = await fetch(local, { method: "POST", redirect: "manual" }), lport = new URL(local).port;
+  ok(lr.status === 303 && lr.headers.get("set-cookie").startsWith(`p_my_notes_ui_${lport}=`), `the local listener's cookie name carries its port, so two local servers keep apart (${lr.headers.get("set-cookie").split("=")[0]})`);
+  const lp = await fetch(new URL("/ui/", local), { headers: { cookie: lr.headers.get("set-cookie").split(";")[0] } });
+  ok(lp.status === 200 && (await lp.text()).includes("<p>local</p>"), "...and its browser calls run in this process, on the attached server");
   const asHost = (host) => new Promise((done) => import("node:http").then((h) => h.get(local.replace(/\/l\/.*/, "/x"), { headers: { host } }, (r) => { r.resume(); done(r.statusCode); })));
   ok(await asHost("evil.example") === 421 && await asHost(new URL(local).host) === 401, "the 127.0.0.1 listener refuses a request naming another Host (DNS rebinding)");
   const remote = (host) => err(() => on.d.openInBrowser({ requestInfo: { headers: { host } } }, { server: on.s }));
@@ -133,7 +132,7 @@ ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops
 
   ok(w.identify({}) === "local" && w.identify({ authInfo: { clientId: "app", extra: { sub: "u1" } } }) === "u1", "identity: no auth is local, otherwise the token's subject");
   ok(/extra\.sub/.test(await err(() => w.identify({ authInfo: { clientId: "app" } }))), "identity: an authenticated request with no subject is refused, not mapped to the client id");
-  ok(/attached server/.test(await err(() => w.link({}))) && /attached server/.test(await err(() => w.openInBrowser({}))), "ui.link and ui.openInBrowser need the server the request belongs to");
+  ok(/attached server/.test(await err(() => w.openInBrowser({}))), "ui.openInBrowser needs the server the request belongs to");
   const anon = defineUi({ name: "a", identify: () => undefined, view: () => html`x` });
   ok(/No user id/.test(await err(() => anon.identify({}))), "identity: an identify() that returns nothing is refused, not mapped to a shared user");
   ok(/must return html/.test(await err(() => defineUi({ name: "v", view: () => ({ __html: "<script>" }) }).render())), "a view that returns a hand-built { __html } object is refused");
@@ -142,45 +141,11 @@ ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops
   ok(attrs({ "x onmouseover=alert(1) y": "1", ok: "1" }).__html === ' ok="1"', "attrs drops a name that would start a second attribute");
   ok(!/javascript:/.test(Menu({ id: "m", items: [{ label: "x", href: "javascript:alert(1)" }, { label: "y", href: "https://example.com" }] }).__html), "Menu drops a javascript: href");
 
-  // one render is shared by viewers asking for the same thing; a burst of writes wakes them once
-  let runs = 0;
-  const many = defineUi({ name: "m", view: async ({ params }) => { runs++; await new Promise((r) => setTimeout(r, 5)); return html`<p>${runs}${params.k}</p>`; } });
-  const first = await many.sync("u"); runs = 0;
-  const held20 = Array.from({ length: 20 }, () => many.sync("u", first, 5000)), other = many.sync("u", { ...first, params: { k: 1 } }, 5000);
-  for (let i = 0; i < 10; i++) many.write();
-  await Promise.all([...held20, other]);
-  ok(runs === 2, `20 viewers of one view plus 1 of another, 10 writes: 2 renders (got ${runs})`);
-
-  const fresh = w.attach(new McpServer({ name: "w2", version: "1" }));
-  fresh.registerTool("peek", { description: "read", annotations: { readOnlyHint: true } }, async () => ({ content: [] }));
-  const [fa, fb] = InMemoryTransport.createLinkedPair();
-  await fresh.connect(fb);
-  const fc = new Client({ name: "agent", version: "1" }); await fc.connect(fa);
-  const f0 = await w.sync("local");
-  let tf = Date.now(), fheld = w.sync("local", f0, 300);
-  await fc.callTool({ name: "peek", arguments: {} }); await fheld;
-  ok(Date.now() - tf >= 250, "readOnlyHint is known from registration: no tools/list needed first");
-  await fc.close();
-
   const bad = await post("/sync", JSON.stringify({ params: null }));
   ok(bad.status === 200 && (await post("/sync", JSON.stringify({ params: "x" }))).status === 200, "web sync treats params that are not an object as none");
   ok((await post("/tool/p_sync")).status === 404, "p_sync is not reachable as a web tool call: sync has its own route");
-  const cur = await w.sync("local");
-  const gate = new AbortController(), polls = Array.from({ length: 9 }, () =>
-    w.site.fetch(new Request("http://localhost:3911/ui/sync", { method: "POST", headers: { cookie, "P-Req": "1" }, body: JSON.stringify(cur), signal: gate.signal })).then(async (r) => [r.status, await r.json()]));
-  const [st, js] = await Promise.race([polls[0], new Promise((r) => setTimeout(r, 500, ["held"]))]);
-  ok(st === 200 && js.v === cur.v && !js.html, "a ninth held poll on one browser session ends the oldest, which answers 'nothing new'");
-  gate.abort(); await Promise.allSettled(polls);
-
-
-  await c.listTools();
-  const s0 = await w.sync("local");
-  let t1 = Date.now(), held = w.sync("local", s0, 300);
-  await c.callTool({ name: "peek", arguments: {} }); await held;
-  ok(Date.now() - t1 >= 250, "a readOnlyHint tool call wakes no viewer");
-  t1 = Date.now(); held = w.sync("local", s0, 5000);
-  await c.callTool({ name: "poke", arguments: {} }); await held;
-  ok(Date.now() - t1 < 1000, "any other tool call still does");
+  const cur = await (await post("/sync")).json(), same2 = await (await post("/sync", JSON.stringify({ h: cur.h }))).json();
+  ok(cur.html && !same2.html && same2.h === cur.h, "web sync answers at once, with HTML only when the page's hash differs");
 
   let rejected = 0; const onRej = () => rejected++; process.on("unhandledRejection", onRej);
   let downstream = -1;
@@ -193,6 +158,71 @@ ok(!H.html && H.v === after.v && Date.now() - t0 < 1000, "a cancelled sync stops
   ok(await status({ method: "POST", path: "/ui/sync" }, Buffer.alloc(1_100_000)) === 413, "a body over 1 MB is refused with 413");
   process.off("unhandledRejection", onRej);
   srv.closeAllConnections(); srv.close(); w.site.close(); await c.close();
+}
+
+// --- the view reads through the server's own tools, as the viewer, read tools only ---
+{
+  const runs = { who: 0, poke: 0 };
+  const { WebStandardStreamableHTTPServerTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js`);
+  // The server's own MCP endpoint, in process, with a bearer check of its own: "t-<sub>" is that user's token.
+  const mcp = async (req) => {
+    const t = /^Bearer t-(\w+)$/.exec(req.headers.get("authorization") ?? "");
+    if (!t) return new Response(null, { status: 401 });
+    const tr = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    await make().connect(tr);
+    return tr.handleRequest(req, { authInfo: { token: t[0].slice(7), clientId: "app", scopes: [], extra: { sub: t[1] } } });
+  };
+  const r = defineUi({ name: "r", reads: ["count"], web: { origin: "https://r.test", secret: "test-secret-test-secret-test-secret-0123", mcp }, view: async ({ call, params }) => {
+    const out = await call(params.tool ?? "who", params.args);
+    return html`<p>${out.content?.[0]?.text}</p>`;
+  } });
+  const make = () => {
+    const rs = r.attach(new McpServer({ name: "r", version: "1" }));
+    rs.registerTool("who", { description: "read", annotations: { readOnlyHint: true } }, async (extra) => { runs.who++; return { content: [{ type: "text", text: "user=" + (extra.authInfo?.extra?.sub ?? "none") }] }; });
+    rs.registerTool("count", { description: "a read the server did not annotate" }, async () => ({ content: [{ type: "text", text: "count=1" }] }));
+    rs.registerTool("poke", { description: "write" }, async () => { runs.poke++; return { content: [{ type: "text", text: "poked" }] }; });
+    return rs;
+  };
+  const rs = make();
+  const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
+  const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
+  const [ra, rb] = InMemoryTransport.createLinkedPair(); await rs.connect(rb);
+  const rc = new Client({ name: "host", version: "1" }, { capabilities: { extensions: { "io.modelcontextprotocol/ui": {} } } }); await rc.connect(ra);
+  const psync = async (params = {}) => { const x = await rc.callTool({ name: "p_sync", arguments: { params } }); return x.isError ? { error: x.content[0].text } : x.structuredContent; };
+
+  const s1 = await psync();
+  ok(s1.html?.includes("user=none") && runs.who === 1, "the view gets its data by calling a read tool through the server's tools/call handler");
+  ok((await psync({ tool: "count" })).html?.includes("count=1"), "a tool listed in reads can be called from the view without editing the server");
+  const refused = await psync({ tool: "poke" });
+  ok(/only call read tools/.test(refused.error ?? "") && runs.poke === 0, "a view cannot call a tool that may change data: refused before it runs");
+  ok(/only call read tools/.test((await psync({ tool: "p_sync" })).error ?? "") && /only call read tools/.test((await psync({ tool: "open_r_in_browser" })).error ?? ""),
+    "a view cannot call p_sync or the open-in-browser tool, though that one is read-only");
+  ok(/call needs a viewer/.test(await err(() => r.render())), "render() outside a request says why call is unavailable");
+
+  // On the web the view reads as the user whose token the link carries, checked by the server's endpoint.
+  const as = (sub) => ({ authInfo: { token: "t-" + sub, clientId: "app", scopes: [], extra: { sub } } });
+  const page = async (sub) => {
+    const res = await r.site.fetch(new Request(await r.link(as(sub)), { method: "POST", headers: { "sec-fetch-site": "same-origin" } }));
+    const cookie = res.headers.get("set-cookie").split(";")[0];
+    return (await r.site.fetch(new Request("https://r.test/ui/", { headers: { cookie } }))).text();
+  };
+  const [pa, pb] = await Promise.all([page("alice"), page("bob")]);
+  ok(pa.includes("user=alice") && pb.includes("user=bob") && !pa.includes("bob"), "on the web the view's tool calls carry the token's user, and two users never share a render");
+  const nm = defineUi({ name: "nm", view: () => html`x` }); await nm.site.listen();
+  ok(/Set web\.mcp/.test(await err(() => nm.link(as("alice")))), "minting a link from an authenticated request without web.mcp throws, saying what to set");
+  nm.site.close();
+  ok(/web\.origin must be https/.test(await err(() => defineUi({ name: "h", web: { origin: "http://r.test", secret: "test-secret-test-secret-test-secret-0123" }, view: () => html`x` }))),
+    "a plain-http origin that is not this machine is refused: the cookie carries a bearer token");
+  await rc.close();
+}
+
+// --- a request from another host gets no 127.0.0.1 link, however its Host header is spelled ---
+{
+  const loc = defineUi({ name: "loc", view: () => html`x` }), ls = loc.attach(new McpServer({ name: "loc", version: "1" }));
+  const from = (host) => err(() => loc.openInBrowser({ requestInfo: { headers: { host } } }, { server: ls }));
+  ok(/Set web.origin/.test(await from("localhost.evil.com")) && /Set web.origin/.test(await from("127.0.0.1.evil.com")) && /Set web.origin/.test(await from("app.example.com")),
+    "a remote Host that only starts like localhost is refused");
+  loc.site.close();
 }
 
 // --- attach order ---

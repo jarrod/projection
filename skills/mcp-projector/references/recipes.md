@@ -2,14 +2,24 @@
 
 Patterns for `mcp-projector` 0.3, written against the task-server shape below and exercised with `testUi`. Adapt names to the server you're working on. Imports come from `"mcp-projector"`.
 
-Common shape used in the snippets:
+Common shape used in the snippets. The server already has these tools; the UI only calls them:
 
 ```ts
 type Status = "todo" | "doing" | "done";
 type Task = { id: number; title: string; owner: string; status: Status };
-// store.list(): Task[], store.add(title, owner), store.setStatus(id, status), store.remove(id)
+// read tools (readOnlyHint, or listed in defineUi({ reads })):
+//   list_tasks() → structuredContent { tasks: Task[] }, get_task({ id }) → structuredContent { task }
+// tools that change data: add_task, set_status, delete_task
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
+
+// The view's only way to data: call a read tool and take what it returns.
+const tasksOf = async (call: ReadTool) => {
+  const r = await call("list_tasks");
+  return r.isError ? [] : (r.structuredContent?.tasks ?? []) as Task[];
+};
 ```
+
+Never import the server's store or database into the UI, and don't add or change tools for it. If no tool returns what a recipe needs, leave that part out.
 
 ## Contents
 
@@ -19,7 +29,7 @@ const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 4. [Search box](#4-search-box)
 5. [Filters and tabs](#5-filters-and-tabs)
 6. [Approval queue, with failures shown](#6-approval-queue-with-failures-shown)
-7. [Run monitor updated from outside tools](#7-run-monitor-updated-from-outside-tools)
+7. [Run monitor](#7-run-monitor)
 8. [Settings switches and selects](#8-settings-switches-and-selects)
 9. [Pagination](#9-pagination)
 10. [Activity feed](#10-activity-feed)
@@ -31,14 +41,14 @@ const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 
 ## 1. One view built from functions
 
-There is one `view`. Split it into plain functions that return `html`. Nothing is registered and nothing is cached: the whole view runs again after every tool call.
+There is one `view`. Split it into plain functions that return `html`. Nothing is registered and nothing is cached: the whole view runs again after every tool call, and reads through tools each time.
 
 ```ts
 export const ui = defineUi({
   name: "tasks",
   attachTo: ["list_tasks"],
-  view: ({ params }) => {
-    const tasks = store.list();
+  view: async ({ call, params }) => {
+    const tasks = await tasksOf(call);
     return html`
       <div class="stack" style="--gap:20px;max-width:960px;margin:0 auto">
         ${Header({
@@ -62,7 +72,7 @@ const Stats = (tasks: Task[]) => {
 };
 ```
 
-`view` may be `async`. A view that returns a plain string throws.
+A view that returns a plain string throws. Call tools in the view and pass plain data to the functions, so they stay synchronous.
 
 ## 2. Collection with inline status and delete confirm
 
@@ -140,7 +150,7 @@ const rows = status ? tasks.filter((t) => t.status === status) : tasks;
 
 ## 6. Approval queue, with failures shown
 
-A tool that fails can return `{ isError: true }` as agents expect. The UI shows its first text as `p-error` on the control that was used, and the control returns to the server's last render. No second tool is needed.
+A tool that fails can return `{ isError: true }` as agents expect. The UI shows its first text as `p-error` on the control that was used, and the control returns to the server's last render. No second tool is needed. The server's existing tool, for reference:
 
 ```ts
 server.registerTool("decide", {
@@ -170,18 +180,11 @@ const Queue = (approvals: Approval[]) => {
 };
 ```
 
-## 7. Run monitor updated from outside tools
+## 7. Run monitor
 
-A worker advances jobs. It is not a tool call, so it tells the UI itself with `ui.write()`. A row menu offers cancel.
+The view reads `runs` from a read tool such as `list_runs`, and a row menu cancels a run through `cancel_run`. Progress made by a worker shows up on the page's next check, within 5 seconds, with nothing added to the server.
 
 ```ts
-// worker.ts
-setInterval(() => {
-  let changed = false;
-  for (const r of runs) if (r.state === "running") { r.progress = Math.min(100, r.progress + 25); if (r.progress === 100) r.state = "done"; changed = true; }
-  if (changed) ui.write();
-}, 1000).unref();
-
 const RUN_TONE: Record<Run["state"], Tone> = { running: "info", done: "ok", cancelled: "neutral" };
 const Runs = (runs: Run[]) => {
   const running = runs.filter((r) => r.state === "running").length;
@@ -202,7 +205,7 @@ const Runs = (runs: Run[]) => {
 };
 ```
 
-Use `? :` for optional props like `actions`: `false` is not `null`, so `actions: cond && x` renders an empty header slot when `cond` is false. `ui.write()` called many times in one tick wakes viewers once.
+Use `? :` for optional props like `actions`: `false` is not `null`, so `actions: cond && x` renders an empty header slot when `cond` is false.
 
 ## 8. Settings switches and selects
 
@@ -245,7 +248,7 @@ If a filter changes, also reset the page: `set: { status: "done", page: 0 }`.
 
 ## 10. Activity feed
 
-Stable ids on `li` make new rows flash while old ones stay put. Cap the list in the store.
+Stable ids on `li` make new rows flash while old ones stay put. Show only the latest few, by a tool argument if the read tool takes one, or by slicing what it returns.
 
 ```ts
 const Activity = (events: { at: number; text: string }[]) =>
@@ -261,10 +264,13 @@ Use a real event id if two events can share a millisecond.
 An `open` param swaps the list for one item's detail. A Back button clears it.
 
 ```ts
-view: ({ params }) => {
-  const open = store.get(Number(params.open));          // undefined for a missing or junk param
-  if (open) return Detail(open);
-  return List(store.list(), params);
+view: async ({ call, params }) => {
+  const id = Number(params.open);
+  if (Number.isInteger(id) && id > 0) {                   // params are untrusted
+    const r = await call("get_task", { id });
+    if (!r.isError && r.structuredContent?.task) return Detail(r.structuredContent.task);
+  }
+  return List(await tasksOf(call), params);
 }
 
 const Detail = (t: Task) => html`<div class="stack">
@@ -276,39 +282,32 @@ const Detail = (t: Task) => html`<div class="stack">
 Button({ variant: "ghost", size: "sm", set: { open: t.id } }, "Open")
 ```
 
-For a short detail, a per-row `Dialog` (recipe 2) is simpler.
+Without a `get_task` tool, find the item in what `list_tasks` returned. For a short detail, a per-row `Dialog` (recipe 2) is simpler.
 
 ## 12. Per-user data
 
-The view receives the MCP user. Without authentication every viewer is `"local"`.
+Nothing to add. Tools called from the view and from buttons get the viewer's `authInfo`, so a tool that already scopes data to its caller shows each person their own. The view also receives the user id, for display. Without authentication every viewer is `"local"`.
 
 ```ts
-view: ({ user }) => Card({ title: `Assigned to ${user}` }, MyTasks(store.assignedTo(user)))
+view: async ({ user, call }) => Card({ title: `Assigned to ${user}` }, MyTasks(await tasksOf(call)))
 ```
-
-In tool handlers, get the same id with `ui.identify(extra)`, so tools and view agree on who is asking:
-
-```ts
-server.registerTool("my_tasks", { description: "List my tasks" }, async (extra) => text(JSON.stringify(store.assignedTo(ui.identify(extra)))));
-```
-
-A tool without an `inputSchema` gets `extra` as its only argument. With one, `extra` is the second.
 
 ## 13. A view that can't throw
 
-The view runs when a viewer syncs, not inside the agent's tool call. A view that throws breaks the UI for that viewer, but the agent's call still succeeds. Guard anything that can fail so the rest of the screen stays.
+The view runs when a viewer syncs, not inside the agent's tool call. A view that throws breaks the UI for that viewer, but the agent's call still succeeds. A read tool can fail with `isError` or throw, so guard each read and keep the rest of the screen.
 
 ```ts
-const Usage = async () => {
+const Usage = async (call: ReadTool) => {
   try {
-    const usage = await fetchUsage();
-    return Stat({ label: "This month", value: usage.total });
+    const r = await call("get_usage");
+    if (r.isError) return Muted(r.content?.[0]?.text ?? "Usage is unavailable right now.");
+    return Stat({ label: "This month", value: r.structuredContent?.total ?? "?" });
   } catch (e) {
     console.error("[ui] usage", e);
     return Muted("Usage is unavailable right now.");
   }
 };
-// view: async () => html`${await Usage()} ...`
+// view: async ({ call }) => html`${await Usage(call)} ...`
 ```
 
 ## 14. Custom CSS and themes
@@ -329,7 +328,7 @@ defineUi({ ..., css: themes.terminal + `:root { --p-ok: #7bd88f }` });
 
 ## 15. Web mode deployments
 
-A local server needs none of this: without `origin`, projector serves the UI on 127.0.0.1 itself. The forms below are for serving it yourself, and need `defineUi({ web: { origin } })`. `origin` is what the browser uses, not the bind address.
+A local server needs none of this: without `origin`, projector serves the UI on 127.0.0.1 itself. The forms below are for serving it yourself, and need `defineUi({ web: { origin, secret, mcp } })`. `origin` is what the browser uses (https), not the bind address. `mcp` is the server's own MCP endpoint, which every browser request goes through with the agent's token. On several instances or serverless, also set `claim` (see `docs/web-mode.md`).
 
 **stdio server with a side port** (one process, so state and writes are shared):
 
@@ -344,7 +343,7 @@ if (process.env.UI_PORT) http.createServer((req, res) => ui.site!.node(req, res)
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 http.createServer(async (req, res) => {
   if (req.url?.startsWith("/mcp")) {
-    const server = createServer();                                   // calls ui.attach inside
+    const server = createServer();                                   // calls ui.attach inside; set web.mcp to this endpoint
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on("close", () => { transport.close(); server.close(); });
     await server.connect(transport);
@@ -368,7 +367,7 @@ const response = await ui.site!.fetch(request);
 if (response) return response;
 ```
 
-**Opening the UI**: set `web.tool` and the library registers a model-visible tool for you (`web: { origin, tool: "open_tasks_in_browser" }`). For your own wording, register a new tool. Never add this to an existing tool:
+**Opening the UI**: the library registers a model-visible tool for you, `open_<name>_in_browser`; rename it with `web.tool`. Only if the caller asks for their own wording, register a new tool. That edits server code. Never add this to an existing tool:
 
 ```ts
 server.registerTool("share_ops", { description: "Open the operations dashboard in the user's browser" }, async (extra) => {

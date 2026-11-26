@@ -1,0 +1,17 @@
+{
+  "name": "cloudflare-worker-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "mcp-projector": "file:../..",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.168.0"
+  }
+}

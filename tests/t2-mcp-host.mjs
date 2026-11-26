@@ -17,6 +17,8 @@ const gz = (await import("node:zlib")).gzipSync(res.text).length; ok(gz < 7000, 
 
 GlobalRegistrator.register({ settings: { disableCSSFileLoading: true } });
 document.head.innerHTML = res.text.match(/<head>([\s\S]*?)<\/head>/)[1];
+ok(/id="p-state">\{"poll":5000\}</.test(res.text), "the shell tells the runtime to check every 5 s by default");
+document.body.innerHTML = '<script type="application/json" id="p-state">{"poll":50}</script>'; // check often, so the test is quick
 const fakeParent = { postMessage: (m) => queueMicrotask(() => hostSide.onmessage?.(m)) };
 Object.defineProperty(window, "parent", { value: fakeParent, configurable: true });
 const hostSide = { start: async () => {}, close: async () => {}, send: async (m) => queueMicrotask(() => window.dispatchEvent(new MessageEvent("message", { data: m, source: fakeParent }))) };
