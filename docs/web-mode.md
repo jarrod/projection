@@ -68,4 +68,4 @@ web: {
 - **`origin`** is a bare https origin (`https://app.example.com`, no path or trailing slash). Serve the UI from its own origin or subdomain where you can: the cookie covers the whole origin, so a script injected into any other page there could act with the agent's token.
 - Links and cookies hold the agent's token, encrypted with `secret`. Keep the secret as safe as the tokens themselves: anyone with both a logged link and the secret could read the token.
 
-For Cloudflare Workers, see [`examples/cloudflare-worker`](../examples/cloudflare-worker).
+For Cloudflare Workers, see [`examples/cloudflare-worker`](https://github.com/jarrod/projector/tree/main/examples/cloudflare-worker).

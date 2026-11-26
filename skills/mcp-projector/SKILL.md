@@ -25,13 +25,13 @@ For example: "Open on `list_notes`, watch only" or "Open on `list_notes`, with `
 
 ## 3. Install Projector
 
-Use the target project's package manager and keep its existing Projector dependency if present. For npm:
+Keep the target project's existing Projector dependency if present. Otherwise install the latest release tag with the project's package manager (each `v*` tag has `dist/` built in). For pnpm:
 
 ```bash
-npm install github:jarrod/projector
+pnpm add github:jarrod/projector#v0.4.0
 ```
 
-If the Git install leaves the package without built exports, check out the same source revision in a temporary directory and run `pnpm install` and `pnpm pack` there. Install the tarball printed by `pnpm pack` from the target project.
+Install a `v*` tag, never a branch: branches hold no `dist/`, so their imports fail.
 
 ## 4. Add and attach the view
 

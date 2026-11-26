@@ -31,7 +31,7 @@ view: async ({ call, params }) => {
 
 ## Components
 
-Each component is a function that returns `html`. Children go in as extra arguments: `Card({ title: "Tasks" }, Table(...))`. Hover one in your editor for its props, or read [`components.ts`](../src/ui/components.ts).
+Each component is a function that returns `html`. Children go in as extra arguments: `Card({ title: "Tasks" }, Table(...))`. Hover one in your editor for its props, or read [`components.ts`](https://github.com/jarrod/projector/blob/main/src/ui/components.ts).
 
 | Kind | Components | Use them for |
 |---|---|---|
@@ -92,7 +92,7 @@ defineUi({ ..., css: ":root { --p-r: 6px }" });   // tweak a token
 defineUi({ ..., css: themes.terminal });          // or themes.pop
 ```
 
-Use the `--p-*` tokens rather than fixed colours so both themes keep working. Tokens are listed in [`tokens.css`](../src/ui/tokens.css).
+Use the `--p-*` tokens rather than fixed colours so both themes keep working. Tokens are listed in [`tokens.css`](https://github.com/jarrod/projector/blob/main/src/ui/tokens.css).
 
 A few rules that keep it readable:
 
@@ -106,4 +106,4 @@ A few rules that keep it readable:
 
 - Patterns for queues, filters, paging, detail views and settings: [recipes](../skills/mcp-projector/references/recipes.md).
 - When something goes wrong: [troubleshooting](../skills/mcp-projector/references/troubleshooting.md).
-- Every component's props: the types in [`components.ts`](../src/ui/components.ts).
+- Every component's props: the types in [`components.ts`](https://github.com/jarrod/projector/blob/main/src/ui/components.ts).
