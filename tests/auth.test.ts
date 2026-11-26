@@ -6,8 +6,8 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { McpServer, createMcpHandler, requireBearerAuth, OAuthError, WebStandardStreamableHTTPServerTransport, isInitializeRequest } from "@modelcontextprotocol/server";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import * as lib from "../dist/index.js";
-const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
+import * as lib from "mcp-projector";
+import { err, textOf } from "./helpers.ts";
 const SECRET = "auth-test-secret-".repeat(3), O = "https://a.test";
 
 // Tokens the verifier knows. Changing an entry is the authorization server revoking or narrowing a token.
@@ -30,7 +30,7 @@ const v2 = async () => {
   const verifier = { verifyAccessToken: async (t) => verified(t) ?? (() => { throw new OAuthError("invalid_token", "unknown or revoked"); })() };
   /** The SDK's bearer gate in front of /mcp (stateless) and /mcp-s (sessions). */
   const serve = async (make, count) => {
-    const gate = requireBearerAuth({ verifier, requiredScopes: ["notes"] }), handler = createMcpHandler(make), sessions = {};
+    const gate = requireBearerAuth({ verifier, requiredScopes: ["notes"] }), handler = createMcpHandler(make), sessions: Record<string, any> = {};
     // The SDK's own pattern for a server that keeps sessions.
     const withSessions = async (req, authInfo) => {
       const sid = req.headers.get("mcp-session-id");
@@ -56,7 +56,7 @@ const v2 = async () => {
 
 describe("server 2.4", () => {
   let S, defineUi, html, WEB_META, ui, srv, sessions, MCP, mkUi;
-  const db = {}, seen = [];
+  const db: Record<string, string[]> = {}, seen: any[] = [];
   let hits = [];
   const count = (q) => hits.push(`${q.method} ${q.url.split("?")[0]}`);
   const make = () => {
@@ -282,7 +282,7 @@ describe("no authInfo", () => {
     ui = defineUi({ name: "k", web: { origin: O, secret: SECRET, mcp: M + path }, view });
     const c = new Client({ name: "agent", version: "1" });
     await c.connect(new StreamableHTTPClientTransport(new URL(M + path), { requestInit: { headers } }));
-    const link = (await c.callTool({ name: "open_k_in_browser", arguments: {} })).content[0].text.match(/https:\S+/)[0];
+    const link = textOf(await c.callTool({ name: "open_k_in_browser", arguments: {} })).match(/https:\S+/)[0];
     const cookie = (await ui.site.fetch(new Request(link, { method: "POST" }))).headers.get("set-cookie").split(";")[0];
     return () => ui.site.fetch(new Request(`${O}/ui/tool/delete_all`, { method: "POST", headers: { cookie, "P-Req": "1" }, body: "{}" })).then((r) => r.status);
   };

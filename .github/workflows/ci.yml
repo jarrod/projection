@@ -1,5 +1,5 @@
 name: ci
-# Limited on purpose: Actions minutes cost money. Build, agent snapshot and unit tests only.
+# Limited on purpose: Actions minutes cost money. Build, type check and unit tests only.
 # The browser (test:web) and Workers (test:workers) suites run locally, never here.
 on:
   pull_request:
@@ -21,7 +21,7 @@ jobs:
           cache: pnpm
       # Skips the Worker example, so wrangler and workerd are never downloaded.
       - run: pnpm install --frozen-lockfile --filter mcp-projector --filter notes-server-example
-      # Builds (type check and size budgets), then the agent snapshot and the unit project.
+      # Builds (type check and size budgets), type-checks the tests, then runs the unit project.
       - run: pnpm test
       # The tarball must carry a built dist.
       - run: pnpm pack --pack-destination "$RUNNER_TEMP" --json | grep -q '"dist/index.js"'

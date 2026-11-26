@@ -1,20 +1,20 @@
 // Runs the notes MCP server + its web UI, and an "agent" MCP client that supports URL elicitation.
 import http from "node:http";
-const NS = new URL("../examples/notes-server", import.meta.url).pathname;
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 process.env.UI_ORIGIN ??= "http://localhost:3000"; // this file serves ui.site.node there
 process.env.UI_SECRET ??= "test-only-secret-never-use-in-production-0123";
-const { createServer } = await import(`${NS}/dist/server.js`);
-const { ui } = await import(`${NS}/dist/ui.js`);
+// Imported after the env is set: the example reads UI_ORIGIN and UI_SECRET when it loads.
+const { createServer } = await import("../examples/notes-server/dist/server.js");
+const { ui } = await import("../examples/notes-server/dist/ui.js");
 
 const [a, b] = InMemoryTransport.createLinkedPair();
 await createServer().connect(b);
 const agent = new Client({ name: "agent", version: "1" }, { capabilities: { elicitation: { form: {}, url: {} } } });
-let lastUrl = null;
-agent.setRequestHandler("elicitation/create", async (req) => { lastUrl = req.params.url; return { action: "accept" }; });
+let lastUrl: string | null = null;
+agent.setRequestHandler("elicitation/create", async (req) => { lastUrl = (req.params as { url?: string }).url ?? null; return { action: "accept" }; });
 await agent.connect(a);
 
-// DEV=1 (set by dev.mjs): seed notes, and /dev signs the browser in without the Continue page.
+// DEV=1 (set by dev.ts): seed notes, and /dev signs the browser in without the Continue page.
 if (process.env.DEV) {
   for (const [title, body] of [["Ship the UI layer", "Stateless core, one sync tool"], ["Write-ahead log", "Group commit, fsync batching"], ["Leader election", ""]])
     await agent.callTool({ name: "add_note", arguments: { title, body } });

@@ -2,18 +2,18 @@
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
 import { spawn } from "node:child_process";
 import { chromium } from "playwright-core";
-import { childEnv } from "./child-env.mjs";
-const HERE = new URL(".", import.meta.url).pathname, BASE = "http://localhost:3000";
+import { childEnv } from "../helpers.ts";
+const SERVER = new URL("../../scripts/web-server.ts", import.meta.url).pathname, BASE = "http://localhost:3000";
 
 const agent = async (name, args = {}) => (await fetch(BASE + "/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, arguments: args }) })).json();
-const status = async (path, init) => (await fetch(BASE + path, { redirect: "manual", ...init })).status;
+const status = async (path: string, init?: RequestInit) => (await fetch(BASE + path, { redirect: "manual", ...init })).status;
 let srv, browser, ctx, page, url;
 const errors = [];
 
 beforeAll(async () => {
-  // Not Vitest's env: its DEV would turn on web-server.mjs's dev mode (seed data, /dev sign-in).
-  srv = spawn("node", [HERE + "web-server.mjs"], { stdio: ["ignore", "pipe", "inherit"], env: childEnv() });
-  await new Promise((res, rej) => { srv.stdout.once("data", (d) => String(d).trim() === "ready" ? res() : rej(new Error(String(d)))); srv.once("exit", () => rej(new Error("web-server.mjs exited: is port 3000 in use?"))); });
+  // Not Vitest's env: its DEV would turn on web-server.ts's dev mode (seed data, /dev sign-in).
+  srv = spawn("node", [SERVER], { stdio: ["ignore", "pipe", "inherit"], env: childEnv() });
+  await new Promise<void>((res, rej) => { srv.stdout.once("data", (d) => String(d).trim() === "ready" ? res() : rej(new Error(String(d)))); srv.once("exit", () => rej(new Error("web-server.ts exited: is port 3000 in use?"))); });
   browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH, args: ["--no-sandbox"] } : { channel: "chrome" });
   ctx = await browser.newContext({ viewport: { width: 1040, height: 760 } });
   // Pages check every 5 s by default; this test's pages check every 200 ms so it runs quickly.

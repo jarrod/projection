@@ -1,6 +1,6 @@
 // Minimal MCP Apps (2026-01-26) app-side bridge. Replaces the ~129 KB gz official client for this job.
 import type { Transport } from "./runtime.js";
-declare const __VERSION__: string; // package.json version, set by build.mjs
+declare const __VERSION__: string; // package.json version, set by scripts/build.ts
 
 export type Port = { post(msg: unknown): void; listen(fn: (msg: any) => void): void };
 const windowPort = (): Port => ({

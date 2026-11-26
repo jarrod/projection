@@ -5,9 +5,9 @@ import { createServer } from "node:net";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { childEnv } from "./child-env.mjs";
+import { childEnv } from "../helpers.ts";
 
-const DIR = new URL("../examples/cloudflare-worker", import.meta.url).pathname;
+const DIR = new URL("../../examples/cloudflare-worker", import.meta.url).pathname;
 const SECRET = "workers-test-secret-".repeat(2);
 const env = childEnv({ WRANGLER_SEND_METRICS: "false", CI: "1" });
 
@@ -16,7 +16,7 @@ const wrangler = (...a) => [join(DIR, "node_modules/.bin/wrangler"), ...a, "--pe
 
 // Starting wrangler can take a while on a cold machine: up to 60 s of waiting for "Ready on".
 beforeAll(async () => {
-  port = await new Promise((r) => { const s = createServer().listen(0, () => { const p = s.address().port; s.close(() => r(p)); }); });
+  port = await new Promise((r) => { const s = createServer().listen(0, () => { const p = (s.address() as { port: number }).port; s.close(() => r(p)); }); });
   O = `http://localhost:${port}`;
   state = mkdtempSync(join(tmpdir(), "projector-workers-"));
   const [bin, ...args] = wrangler("d1", "execute", "DB", "--local", "--file", "schema.sql");
@@ -62,7 +62,7 @@ describe("1. MCP, stateless, JSON responses", () => {
 
 let link, cookie, body, s1;
 const post = () => fetch(link, { method: "POST", redirect: "manual", headers: { "sec-fetch-site": "same-origin" } });
-const get = (path, init = {}, c = cookie) => fetch(O + path, { redirect: "manual", ...init, headers: { cookie: c, ...init.headers } });
+const get = (path: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}, c = cookie) => fetch(O + path, { redirect: "manual", ...init, headers: { cookie: c, ...init.headers } });
 const sync = async (h) => (await get("/ui/sync", { method: "POST", headers: { "P-Req": "1" }, body: JSON.stringify({ h, params: {} }) })).json();
 
 describe("2-3. the link: continue page, redeem once", () => {
