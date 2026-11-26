@@ -1,12 +1,14 @@
 # Getting started
 
-Add a live UI to an existing MCP server. You write one file and change one line. To have an agent do it, [install the skill](#have-an-agent-do-it).
+Add a live UI to an existing MCP server. You write one file and change one line. Your tools stay as they are: the UI reads and writes only through them. To have an agent do it, [install the skill](#have-an-agent-do-it).
 
 ![The notes example](screenshots/shot-light.png)
 
 ## Does it fit?
 
-You need a long-lived Node server built on `McpServer` from the MCP TypeScript SDK, with zod. A low-level `Server`, serverless runtimes and other languages won't work. Supported versions are in `package.json`, and your package manager reports a mismatch when you install.
+You need a server built on `McpServer` from the MCP TypeScript SDK (v1 `@modelcontextprotocol/sdk`, or v2 `@modelcontextprotocol/server`), with zod. It can be a long-running Node server or run on a serverless host such as Cloudflare Workers ([deploying](web-mode.md#deploying)). A low-level `Server` and other languages won't work.
+
+The UI can only show what your tools return, so you need at least one tool that reads what people want to see. Supported versions are in `package.json`, and your package manager reports a mismatch when you install.
 
 ## 1. Install
 
@@ -18,24 +20,28 @@ npm install github:jarrod/projector
 
 ```ts
 import { defineUi, html, Header, Table, Button } from "mcp-projector";
-import { store } from "./store.js";
 
 export const ui = defineUi({
   name: "notes",
   attachTo: ["list_notes"],     // for apps that support MCP Apps (untested)
-  view: ({ user }) => html`
-    ${Header({ title: "Notes" })}
-    ${Table({
-      id: "notes", rows: store.list(user), rowKey: (n) => n.id,
-      columns: [
-        { label: "Title", key: "title" },
-        { label: "", cell: (n) => Button({ size: "sm", tool: "pin_note", args: { id: n.id } }, "Pin") },
-      ],
-    })}`,
+  view: async ({ call }) => {
+    const { structuredContent } = await call("list_notes");   // your tool, as the viewer
+    return html`
+      ${Header({ title: "Notes" })}
+      ${Table({
+        id: "notes", rows: structuredContent?.notes ?? [], rowKey: (n) => n.id,
+        columns: [
+          { label: "Title", key: "title" },
+          { label: "", cell: (n) => Button({ size: "sm", tool: "pin_note", args: { id: n.id } }, "Pin") },
+        ],
+      })}`;
+  },
 });
 ```
 
-The view reads your store directly and returns HTML. The button calls `pin_note`, the same tool the agent calls.
+The view gets its data by calling `list_notes`, and the button calls `pin_note`: the same tools the agent calls, through the same handler, as the person viewing.
+
+This assumes `list_notes` returns `structuredContent` and is annotated `readOnlyHint: true`. If it returns only text, read the text: the [example](../examples/notes-server/src/ui.ts) does. If it isn't annotated, list it in `reads: ["list_notes"]` rather than editing the tool. A view can only call read tools, so rendering never changes data.
 
 ## 3. Attach it
 
@@ -45,13 +51,13 @@ Wrap the server where you create it, before any tool is registered:
 const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 ```
 
-That's the whole integration. Your tools, schemas and results don't change; projector adds one tool, `open_notes_in_browser`.
+That's the whole integration. Your tools, schemas and results don't change, and nothing else in the server needs editing; projector adds one tool, `open_notes_in_browser`.
 
 ## 4. See it
 
 Ask your agent to show you the notes UI. It calls `open_notes_in_browser`, and you get a single-use link that opens the UI in your browser.
 
-A server people reach over the network needs one more setting: see [Web mode](web-mode.md#hosted-servers-give-the-origin).
+A server people reach over the network needs two more settings: see [Web mode](web-mode.md#hosted-servers-give-the-origin-and-a-secret).
 
 To look at it without an agent, render a static page:
 
@@ -72,7 +78,7 @@ const view = await t.mount();
 await t.agent.callTool({ name: "add_note", arguments: { title: "Hello", body: "" } });
 await view.until((text) => text.includes("Hello"));   // the agent's change shows up
 await view.click("pin_note", { id: 1 });               // a person's click works
-view.close(); await t.close(); process.exit();          // exit: a pending poll can hold Node open
+view.close(); await t.close();
 ```
 
 ## Have an agent do it

@@ -6,8 +6,9 @@
     "build": "node build.mjs",
     "prepare": "node build.mjs",
     "example": "cd examples/notes-server && npm install && npm run build",
-    "test": "npm run build && npm run example && cd tests && npm install && npm run snapshot && npm run unit && npm run host",
-    "test:web": "cd tests && npm run web"
+    "test": "npm run build && npm run example && cd tests && npm install && npm run snapshot && npm run unit && npm run sessions && npm run auth && npm run sdks && npm run host",
+    "test:web": "cd tests && npm run web",
+    "test:workers": "npm run build && cd examples/cloudflare-worker && npm install && node ../../tests/t6-workers.mjs"
   },
   "keywords": [
     "mcp",
@@ -30,8 +31,21 @@
     "docs/*.md"
   ],
   "peerDependencies": {
+    "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "@modelcontextprotocol/server": "^2.3.1",
     "zod": "^3.25.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/client": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "@modelcontextprotocol/server": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

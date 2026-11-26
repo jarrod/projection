@@ -1,14 +1,28 @@
-import { defineUi, themes, ThemeToggle, html, Header, Button, Badge, Dot, Stat, Grid, Table, Tabs, Dialog, Form, Input, Textarea, Close, Empty, Stack, Card, Muted } from "mcp-projector";
-import { store, type Note } from "./store.js";
+import { handleMcp } from "./server.js";
+import { defineUi, themes, ThemeToggle, html, Header, Button, Badge, Dot, Stat, Grid, Table, Tabs, Dialog, Form, Input, Textarea, Close, Empty, Card } from "mcp-projector";
+
+type Note = { id: number; title: string; pinned: boolean };
+
+// The view reads only through the server's own tools. list_notes returns text for the model ("#1 (pinned) Title"),
+// so the UI reads that text back. A tool that returned structuredContent could be used as it is.
+const notesFrom = (r: any): Note[] => String(r.content?.[0]?.text ?? "").split("\n").flatMap((line) => {
+  const m = /^#(\d+)( \(pinned\))? (.*)$/.exec(line);
+  return m ? [{ id: Number(m[1]), pinned: !!m[2], title: m[3] }] : [];
+});
 
 export const ui = defineUi({
   name: "notes",
   attachTo: ["list_notes"],
+  reads: ["list_notes"], // changes nothing, but the server does not annotate it readOnlyHint
   css: themes.terminal,
-  web: { origin: process.env.UI_ORIGIN }, // unset: projector serves the UI itself on 127.0.0.1
-  view: ({ user, params }) => {
+  web: {
+    origin: process.env.UI_ORIGIN, // unset: projector serves the UI itself on 127.0.0.1
+    secret: process.env.UI_SECRET,
+    mcp: (req) => handleMcp(req), // the browser's calls go through the server's own MCP endpoint, in process
+  },
+  view: async ({ call, params }) => {
     const q = String(params.q ?? "").toLowerCase();
-    const notes = store.list(user).filter((n) => n.title.toLowerCase().includes(q));
+    const notes = notesFrom(await call("list_notes")).filter((n) => n.title.toLowerCase().includes(q));
     const pinned = notes.filter((n) => n.pinned);
     return html`
       <div class="stack" style="--gap:20px;max-width:880px;margin:0 auto">
@@ -41,7 +55,7 @@ const List = (id: "all" | "pinned", notes: Note[]) => Table<Note>({
     description: "Ask your assistant to add one, or create it here.", action: Button({ opens: "new-note", variant: "secondary", size: "sm" }, "New note") })}</div>`,
   columns: [
     { label: "#", cell: (n) => n.id, mono: true, width: "48px" },
-    { label: "Note", cell: (n) => Stack({ gap: 2 }, html`<strong style="font-weight:500">${n.title}</strong>`, n.body && Muted(n.body)) },
+    { label: "Note", cell: (n) => html`<strong style="font-weight:500">${n.title}</strong>` },
     { label: "Status", cell: (n) => n.pinned ? Badge({ tone: "info", dot: true }, "Pinned") : Badge({}, "Note"), width: "110px" },
     { label: "", align: "right", width: "56px", cell: (n) =>
       Button({ variant: "ghost", size: "sm", icon: "pin", label: n.pinned ? "Unpin" : "Pin", tool: "pin_note", args: { id: n.id } }) },

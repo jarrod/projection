@@ -1,13 +1,13 @@
-// Browser runtime. Holds one thing: the view params. It morphs server HTML, turns events into tool calls, and asks again when data changes.
+// Browser runtime. Holds one thing: the view params. It morphs server HTML, turns events into tool calls, and checks for changes on a cadence.
 // Attributes: hx-tool, hx-vals, hx-trigger (click|submit|change|input), p-set, p-debounce, p-close, p-keep, p-keep-values.
 import { morph, changed } from "./morph.js";
 
 export interface Transport { call(tool: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<any> }
-export type State = { h?: string; v?: number };
+export type State = { h?: string; poll?: number };
 
 const tpl = (s: string) => { const t = document.createElement("template"); t.innerHTML = s; return t.content.firstElementChild!; };
 
-export function start(t: Transport, { h, v }: State = {}) {
+export function start(t: Transport, { h, poll: gap = 5000 }: State = {}) {
   let params: Record<string, unknown> = {}, gen = 0, poll: AbortController | undefined;
   const ready = () => document.documentElement.setAttribute("p-ready", "");
 
@@ -23,24 +23,21 @@ export function start(t: Transport, { h, v }: State = {}) {
     });
   };
 
-  // One long-poll at a time. The server answers at once if we are behind (or v is unset), otherwise when something changes.
-  // Starting a new one cancels the old one, so a superseded poll doesn't hold a connection until it times out.
+  // One check at a time, every `gap` ms while the page is visible; failures back off up to a minute.
+  // Starting a new loop (an action, a param change, the tab showing again) cancels the old one and checks at once.
   const loop = async (g: number) => {
     poll?.abort();
     const { signal } = (poll = new AbortController());
-    for (let wait = 500; g === gen; ) {
-      const t0 = Date.now(), asked = v;
+    for (let wait = gap; g === gen && !document.hidden; await new Promise((r) => setTimeout(r, wait))) {
       try {
-        const r = (await t.call("p_sync", { params, h, v }, signal)).structuredContent;
+        const r = (await t.call("p_sync", { params, h }, signal)).structuredContent;
         if (g !== gen) return;
-        wait = 500; v = r.v;
+        wait = gap;
         if (r.html) { h = r.h; apply(r.html); }
         ready();
-        // An instant answer with nothing new, when we said we were up to date, means the server did not hold the call: don't spin.
-        if (asked && !r.html && Date.now() - t0 < 500) await new Promise((r) => setTimeout(r, 1000));
       } catch {
         if (g !== gen) return;
-        await new Promise((r) => setTimeout(r, (wait = Math.min(wait * 2, 10_000))));
+        wait = Math.min(wait * 2, 60_000);
       }
     }
   };
@@ -62,7 +59,7 @@ export function start(t: Transport, { h, v }: State = {}) {
   const fire = async (el: Element) => {
     const tool = el.getAttribute("hx-tool");
     if (!tool) { // p-set: change the view params and render again
-      params = { ...params, ...argsOf(el) }; v = undefined;
+      params = { ...params, ...argsOf(el) };
       close(el);
       return loop(++gen);
     }
@@ -71,9 +68,10 @@ export function start(t: Transport, { h, v }: State = {}) {
     el.setAttribute("aria-busy", "true");
     at.removeAttribute("p-error");
     try {
-      await t.call(tool, argsOf(el)); // the open poll returns with the new HTML
+      await t.call(tool, argsOf(el));
       if (c.reset && !el.hasAttribute("p-keep-values")) c.reset();
       close(el);
+      loop(++gen); // show the result of our own action at once
     } catch (e: any) {
       // The call failed, so the control goes back to what the server last rendered.
       if (c.type === "checkbox") c.checked = c.defaultChecked;
@@ -98,6 +96,8 @@ export function start(t: Transport, { h, v }: State = {}) {
     });
   }
 
+  // No checks in a hidden tab; one at once when it shows again.
+  document.onvisibilitychange = () => loop(++gen);
   if (h) ready();
   loop(gen);
 }

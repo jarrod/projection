@@ -1,4 +1,4 @@
-// Web transport: one POST per call. p_sync is the same long-poll the MCP host mode uses.
+// Web transport: one POST per call. p_sync is the same check the MCP host mode makes.
 import type { Transport } from "./runtime.js";
 
 export const httpTransport = (base: string): Transport => ({
