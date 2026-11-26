@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-// unit: what `npm test` runs. web: real Chrome on port 3000. workers: wrangler dev.
+// unit: what `pnpm test` runs. web: real Chrome on port 3000. workers: wrangler dev.
 // Tests in a file run in order and share state, as the old scripts did; files run in parallel.
 export default defineConfig({
   test: {

@@ -2,11 +2,10 @@
 
 The notes server from `../notes-server`, run as a Worker with D1. projector is used as it is, with nothing added for Workers.
 
-Run it locally:
+Run it locally, after `pnpm install` at the repository root:
 
-    npm install
-    npx wrangler d1 execute DB --local --file schema.sql
-    npx wrangler dev --var UI_ORIGIN:http://localhost:8787 --var UI_SECRET:<32 or more random characters>
+    pnpm exec wrangler d1 execute DB --local --file schema.sql
+    pnpm exec wrangler dev --var UI_ORIGIN:http://localhost:8787 --var UI_SECRET:<32 or more random characters>
 
 The MCP server is at `/mcp`. Call `open_notes_in_browser` from any MCP client to get a link to the UI.
 

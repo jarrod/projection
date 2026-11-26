@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.4.0",
-    "mcp-projector": "file:../..",
+    "mcp-projector": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -4,11 +4,13 @@ Library: `mcp-projector`. It adds a live, styled UI for humans to an MCP server.
 
 - **Read `AGENTS.md` first.** It has the integration and the gotchas. The full API is the documented types in `src/`; human docs are in `docs/`.
 - Layout: library in `src/` (`ui.ts` core and MCP attach, `web.ts` web mode, `ui/` components and CSS) and `src/client/` (browser runtime, bundled into `dist/assets.js` by `build.mjs`). Example integration in `examples/notes-server/`. End-to-end tests in `tests/`.
-- Build: `npm install && npm run build`. The build fails if a size budget is exceeded. Don't raise a budget without a reason.
-- Test: `npm test` (agent snapshot, then the Vitest `unit` project: `tests/t{1,2,4,5,7}-*.test.mjs`). `npm run test:web` runs real Chrome via `playwright-core` (uses your installed Chrome, or set `CHROME_PATH`; needs port 3000 free). `npm run test:workers` runs the Worker example under `wrangler dev`. `npx vitest run t5 -t "claim"` runs one file or test, `npm run test:watch` reruns on change. Child processes get `childEnv()` from `tests/child-env.mjs`, since Vitest sets `DEV` and `NODE_ENV=test`.
+- Node 22.18 or later, pnpm (`corepack enable` picks the version in `packageManager`). The repo is a pnpm workspace: the root package plus `examples/*`, which depend on it with `workspace:*`.
+- Build: `pnpm install && pnpm build`. The build fails if a size budget is exceeded. Don't raise a budget without a reason.
+- Test: `pnpm test` (agent snapshot, then the Vitest `unit` project: `tests/t{1,2,4,5,7}-*.test.mjs`). `pnpm test:web` runs real Chrome via `playwright-core` (uses your installed Chrome, or set `CHROME_PATH`; needs port 3000 free). `pnpm test:workers` runs the Worker example under `wrangler dev`. `pnpm vitest run t5 -t "claim"` runs one file or test, `pnpm test:watch` reruns on change. Child processes get `childEnv()` from `tests/child-env.mjs`, since Vitest sets `DEV` and `NODE_ENV=test`.
+- CI (`.github/workflows/ci.yml`) is limited on purpose, because Actions minutes cost money: one Node version, `pnpm test` and a pack check, on pull requests and pushes to main. Never add the browser or Workers suites to CI.
 - Dev loop: `node tests/dev.mjs`, then open http://localhost:3000/dev. Edits to `src/` or the example rebuild (about 1 s), restart with seed data, and the open page reloads itself.
 - Invariants:
-  - Agent tool results never change. `npm test` diffs `tests/agent-snapshot.mjs` output against `tests/baseline.json`.
+  - Agent tool results never change. `pnpm test` diffs `tests/agent-snapshot.mjs` output against `tests/baseline.json`.
   - No client JavaScript beyond the runtime.
   - Projector never adds state or auth context outside the MCP server; it only reflects the MCP server's state and the agent's auth. A person sees the UI only because the agent opened it, and has no identity, account or session of their own.
   - The browser carries exactly the agent's MCP auth: the agent's bearer token, sealed in the link and cookie, sent with every browser request to the server's own MCP endpoint (`web.mcp`), so the server checks it as it checks the agent. Only the local 127.0.0.1 UI (no `web.origin`) runs browser calls in process; with an origin, `web.mcp` is required and everything fails closed through the server's own auth.

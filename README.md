@@ -21,5 +21,6 @@ Using Claude Code or Codex? [Install the skill](docs/getting-started.md#have-an-
 ## Develop
 
 ```bash
-npm install && npm test
+corepack enable
+pnpm install && pnpm test
 ```

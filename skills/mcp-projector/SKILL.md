@@ -31,7 +31,7 @@ Use the target project's package manager and keep its existing Projector depende
 npm install github:jarrod/projector
 ```
 
-If the Git install leaves the package without built exports, check out the same source revision in a temporary directory and run `npm ci` and `npm pack` there. Install the tarball printed by `npm pack` from the target project.
+If the Git install leaves the package without built exports, check out the same source revision in a temporary directory and run `pnpm install` and `pnpm pack` there. Install the tarball printed by `pnpm pack` from the target project.
 
 ## 4. Add and attach the view
 

@@ -16,7 +16,7 @@ const rebuild = () => {
   pending.clear();
   console.log(`\n[dev] change in ${[lib && "library", ex && "example"].filter(Boolean).join(" + ")}, rebuilding`);
   if (lib && !run("node build.mjs")) return;
-  if (ex && !run("npx tsc -p examples/notes-server")) return;
+  if (ex && !run("node_modules/.bin/tsc -p examples/notes-server")) return;
   child.once("exit", start);
   child.kill();
 };
