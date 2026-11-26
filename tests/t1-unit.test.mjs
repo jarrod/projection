@@ -1,18 +1,16 @@
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
 
 const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-const SDK = `${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm`;
 const { testUi } = await import(`${NS}/node_modules/mcp-projector/dist/testing.js`);
 const { defineUi, html, attrs, Menu } = await import(`${NS}/node_modules/mcp-projector/dist/index.js`);
-const { McpServer } = await import(`${SDK}/server/mcp.js`);
-const { Client } = await import(`${SDK}/client/index.js`);
-const { InMemoryTransport } = await import(`${SDK}/inMemory.js`);
-const { WebStandardStreamableHTTPServerTransport: WST } = await import(`${SDK}/server/webStandardStreamableHttp.js`);
-const { ElicitRequestSchema } = await import(`${SDK}/types.js`);
+import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 const { createServer } = await import(`${NS}/dist/server.js`);
 const http = await import("node:http");
 const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
 const SECRET = "test-secret-test-secret-test-secret-0123";
+// A tool handler's context for an HTTP request that named this Host.
+const from = (host) => ({ http: { req: new Request("http://localhost/mcp", { headers: { host } }) } });
 
 describe("harness: agent + UI on the real server", () => {
   let t, v, other;
@@ -134,7 +132,7 @@ describe("web mode: Node adapter and session limits", () => {
     ws.registerTool("poke", { description: "write" }, async () => ({ content: [] }));
     return ws;
   };
-  const mcp = async (req) => { const tr = new WST({ sessionIdGenerator: undefined, enableJsonResponse: true }); await mk().connect(tr); return tr.handleRequest(req); };
+  const mcp = (req) => createMcpHandler(mk).fetch(req);
   const openLink = async () => (await c.callTool({ name: "open_w", arguments: {} })).content[0].text.match(/http\S+/)[0];
   // web mode is on by default: a default tool, and without an origin projector serves the UI on 127.0.0.1 itself
   const plain = async (opts) => {
@@ -195,7 +193,7 @@ describe("web mode: Node adapter and session limits", () => {
     expect(await asHost(new URL(local).host)).toBe(401);
   });
   test("a remote request with no origin is refused instead of getting a 127.0.0.1 link; a loopback one is not", async () => {
-    const remote = (host) => err(() => on.d.openInBrowser({ requestInfo: { headers: { host } } }, { server: on.s }));
+    const remote = (host) => err(() => on.d.openInBrowser(from(host), { server: on.s }));
     expect(await remote("app.example.com")).toMatch(/web\.origin/);
     expect(await remote("localhost:8080")).toBe("");
   });
@@ -208,7 +206,7 @@ describe("web mode: Node adapter and session limits", () => {
     try {
       const [ea, eb] = InMemoryTransport.createLinkedPair(); await es.connect(eb);
       const ec = new Client({ name: "el", version: "1" }, { capabilities: { elicitation: { url: {} } } });
-      ec.setRequestHandler(ElicitRequestSchema, async () => { throw new Error("host gave up"); });
+      ec.setRequestHandler("elicitation/create", async () => { throw new Error("host gave up"); });
       await ec.connect(ea);
       const text = (await ec.callTool({ name: "open_el_in_browser", arguments: {} })).content[0].text;
       expect(text).toMatch(/Share this private link.*http:\/\/127\.0\.0\.1/);
@@ -224,10 +222,10 @@ describe("web mode: Node adapter and session limits", () => {
   });
   test("identity: no auth is local, otherwise the token's subject", () => {
     expect(w.identify({})).toBe("local");
-    expect(w.identify({ authInfo: { clientId: "app", extra: { sub: "u1" } } })).toBe("u1");
+    expect(w.identify({ http: { authInfo: { clientId: "app", extra: { sub: "u1" } } } })).toBe("u1");
   });
   test("identity: an authenticated request with no subject is refused, not mapped to the client id", async () => {
-    expect(await err(() => w.identify({ authInfo: { clientId: "app" } }))).toMatch(/extra\.sub/);
+    expect(await err(() => w.identify({ http: { authInfo: { clientId: "app" } } }))).toMatch(/extra\.sub/);
   });
   test("ui.openInBrowser needs the server the request belongs to", async () => {
     expect(await err(() => w.openInBrowser({}))).toMatch(/attached server/);
@@ -287,19 +285,17 @@ describe("the view reads through the server's own tools, as the viewer, read too
   const mcp = async (req) => {
     const t = /^Bearer t-(\w+)$/.exec(req.headers.get("authorization") ?? "");
     if (!t) return new Response(null, { status: 401 });
-    const tr = new WST({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    await make().connect(tr);
-    return tr.handleRequest(req, { authInfo: { token: t[0].slice(7), clientId: "app", scopes: [], extra: { sub: t[1] } } });
+    return createMcpHandler(make).fetch(req, { authInfo: { token: t[0].slice(7), clientId: "app", scopes: [], extra: { sub: t[1] } } });
   };
   const make = () => {
     const rs = r.attach(new McpServer({ name: "r", version: "1" }));
-    rs.registerTool("who", { description: "read", annotations: { readOnlyHint: true } }, async (extra) => { runs.who++; return { content: [{ type: "text", text: "user=" + (extra.authInfo?.extra?.sub ?? "none") }] }; });
+    rs.registerTool("who", { description: "read", annotations: { readOnlyHint: true } }, async (ctx) => { runs.who++; return { content: [{ type: "text", text: "user=" + (ctx.http?.authInfo?.extra?.sub ?? "none") }] }; });
     rs.registerTool("count", { description: "a read the server did not annotate" }, async () => ({ content: [{ type: "text", text: "count=1" }] }));
     rs.registerTool("poke", { description: "write" }, async () => { runs.poke++; return { content: [{ type: "text", text: "poked" }] }; });
     return rs;
   };
   // On the web the view reads as the user whose token the link carries, checked by the server's endpoint.
-  const as = (sub) => ({ authInfo: { token: "t-" + sub, clientId: "app", scopes: [], extra: { sub } } });
+  const as = (sub) => ({ http: { authInfo: { token: "t-" + sub, clientId: "app", scopes: [], extra: { sub } } } });
   const page = async (sub) => {
     const res = await r.site.fetch(new Request(await r.link(as(sub)), { method: "POST", headers: { "sec-fetch-site": "same-origin" } }));
     const cookie = res.headers.get("set-cookie").split(";")[0];
@@ -355,9 +351,9 @@ describe("the view reads through the server's own tools, as the viewer, read too
 describe("a request from another host gets no 127.0.0.1 link, however its Host header is spelled", () => {
   test("a remote Host that only starts like localhost is refused", async () => {
     const loc = defineUi({ name: "loc", view: () => html`x` }), ls = loc.attach(new McpServer({ name: "loc", version: "1" }));
-    const from = (host) => err(() => loc.openInBrowser({ requestInfo: { headers: { host } } }, { server: ls }));
+    const of = (host) => err(() => loc.openInBrowser(from(host), { server: ls }));
     try {
-      for (const host of ["localhost.evil.com", "127.0.0.1.evil.com", "app.example.com"]) expect(await from(host), `Host: ${host}`).toMatch(/Set web.origin/);
+      for (const host of ["localhost.evil.com", "127.0.0.1.evil.com", "app.example.com"]) expect(await of(host), `Host: ${host}`).toMatch(/Set web.origin/);
     } finally { loc.site.close(); }
   });
 });

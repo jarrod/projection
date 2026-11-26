@@ -3,14 +3,9 @@
 //   const view = await t.mount();
 //   await t.agent.callTool({ name: "add_note", arguments: { title: "x", body: "" } });
 //   await view.until((text) => text.includes("x"));
-// The client comes from whichever MCP SDK is installed: v1 (its client can drive a v2 server too), else v2.
-const v1 = await import("@modelcontextprotocol/sdk/client/index.js").catch(() => undefined);
-const { Client, InMemoryTransport }: any = v1
-  ? { ...v1, ...await import("@modelcontextprotocol/sdk/inMemory.js") }
-  // @ts-ignore: an optional peer, not installed here
-  : await import("@modelcontextprotocol/client");
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
-/** The MCP client: `Client` from the installed SDK. */
+/** The MCP client: `Client` from @modelcontextprotocol/client. */
 type TestClient = {
   callTool(params: { name: string; arguments?: Record<string, unknown> }, ...options: any[]): Promise<any>;
   listTools(...options: any[]): Promise<{ tools: any[] }>;

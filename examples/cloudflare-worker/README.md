@@ -12,7 +12,7 @@ The MCP server is at `/mcp`. Call `open_notes_in_browser` from any MCP client to
 
 Only these parts are Cloudflare-specific:
 
-- `src/index.ts`: routes `/mcp` to `handleMcp` (the MCP SDK's web-standard transport, in `src/server.ts`), `/ui` to `ui.site.fetch`, redirects `/` to `/ui/` and answers 404 to the rest.
+- `src/index.ts`: routes `/mcp` to `handleMcp` (the MCP SDK's `createMcpHandler`, in `src/server.ts`), `/ui` to `ui.site.fetch`, redirects `/` to `/ui/` and answers 404 to the rest.
 - `src/server.ts` and `src/ui.ts`: `import { env } from "cloudflare:workers"` for the `DB` binding and the two vars. `ui.attach` is the only projector line in the tools.
 - `src/ui.ts`: `web.mcp: (req) => handleMcp(req)` sends the browser's calls to the same `/mcp` handler in-process, as normal `tools/call` requests with the agent's own bearer token (a Worker fetching its own URL is unreliable, so pass a function, not a URL).
 - `src/ui.ts`: `web.claim` is a D1 insert into `used_links`, so a link works once across all isolates.

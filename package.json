@@ -6,9 +6,11 @@
     "build": "node build.mjs",
     "prepare": "node build.mjs",
     "example": "cd examples/notes-server && npm install && npm run build",
-    "test": "npm run build && npm run example && cd tests && npm install && npm run snapshot && npm run unit",
-    "test:web": "cd tests && npm run web",
-    "test:workers": "npm run build && cd examples/cloudflare-worker && npm install && cd ../../tests && npm run workers"
+    "test": "npm run build && npm run example && npm run test:snapshot && vitest run --project unit",
+    "test:snapshot": "node tests/agent-snapshot.mjs examples/notes-server/dist/server.js open_notes_in_browser | diff - tests/baseline.json && echo \"PASS agent-facing tools and results match the baseline\"",
+    "test:web": "vitest run --project web",
+    "test:workers": "npm run build && cd examples/cloudflare-worker && npm install && cd ../.. && vitest run --project workers",
+    "test:watch": "vitest --project unit"
   },
   "keywords": [
     "mcp",
@@ -31,27 +33,25 @@
     "docs/*.md"
   ],
   "peerDependencies": {
-    "@modelcontextprotocol/client": "^2.3.1",
-    "@modelcontextprotocol/sdk": "^1.20.0",
-    "@modelcontextprotocol/server": "^2.3.1",
-    "zod": "^3.25.0 || ^4.0.0"
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/client": {
       "optional": true
-    },
-    "@modelcontextprotocol/sdk": {
-      "optional": true
-    },
-    "@modelcontextprotocol/server": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@happy-dom/global-registrator": "^21.0.4",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/ext-apps": "2.0.4",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@types/node": "^26.6.6",
     "esbuild": "^0.24.2",
+    "playwright-core": "^1.65.1",
     "typescript": "^7.0.2",
+    "vitest": "^4.1.12",
     "zod": "^4.6.7"
   },
   "exports": {

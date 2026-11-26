@@ -18,7 +18,7 @@ mkdirSync("dist", { recursive: true });
 writeFileSync("dist/assets.js", `export const RUNTIME = ${JSON.stringify(RUNTIME)};\nexport const WEB = ${JSON.stringify(WEB)};\nexport const CSS = ${JSON.stringify(CSS)};\nexport const TOKENS = ${JSON.stringify(TOKENS)};\nexport const KIT = ${JSON.stringify(KIT)};\nexport const THEMES = ${JSON.stringify(THEMES)};\n`);
 writeFileSync("dist/assets.d.ts", readFileSync("src/assets.d.ts"));
 
-const server = (await build({ entryPoints: ["dist/index.js"], bundle: true, minify: true, format: "esm", platform: "node", write: false, external: ["zod", "@modelcontextprotocol/sdk", "node:*", "./assets.js"],
+const server = (await build({ entryPoints: ["dist/index.js"], bundle: true, minify: true, format: "esm", platform: "node", write: false, external: ["zod", "@modelcontextprotocol/*", "node:*", "./assets.js"],
   plugins: [{ name: "x", setup(b) { b.onResolve({ filter: /assets\.js$/ }, (a) => ({ path: a.path, external: true })); } }] })).outputFiles[0].text;
 
 const gz = (s) => gzipSync(s, { level: 9 }).length;

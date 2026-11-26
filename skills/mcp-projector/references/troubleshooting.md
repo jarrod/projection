@@ -28,7 +28,7 @@ Find the symptom, check the cause, apply the fix.
 | The action failed and the control shows `p-error` | The handler threw, returned `isError`, or zod rejected the input | Read the message in the tool result. Fix the args the control sends |
 | A number arrives as a string | Form fields and `Select` send text | `z.coerce.number()` in the schema, or send the number in `args` |
 | Search box calls the tool on every key | `debounce` missing | `Input({ tool, debounce: 250 })`, or use `set: true` and read the param in the view |
-| The click works in a host but not on the web | The handler reads `extra` fields web mode doesn't provide (`sendNotification`, `sendRequest`, a client id) | Don't offer that action on the web. Don't change the handler for the UI |
+| The click works in a host but not on the web | The handler uses context the web doesn't provide (`ctx.mcpReq.send`, `ctx.mcpReq.elicitInput`, a client id) | Don't offer that action on the web. Don't change the handler for the UI |
 | Express web routes 404 or get an empty body | `site.node` is mounted under a path, or after a body parser | Mount it at the app root, before body parsers |
 | Every viewer sees the same data | No authentication, so every viewer is `"local"`. Params stay per browser | Add auth and filter by `user`, or accept it for a single-user server |
 

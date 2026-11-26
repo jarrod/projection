@@ -1,7 +1,8 @@
 // Acts as an AI agent: list tools, call them, print everything the model would see.
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-const { createServer } = await import(process.argv[2]);
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+const { createServer } = await import(pathToFileURL(resolve(process.argv[2])).href);
 const [ct, st] = InMemoryTransport.createLinkedPair();
 await createServer().connect(st);
 const c = new Client({ name: "agent", version: "1" });

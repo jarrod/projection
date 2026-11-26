@@ -6,7 +6,7 @@ Add a live UI to an existing MCP server. You write one file and change one line.
 
 ## Does it fit?
 
-You need a server built on `McpServer` from the MCP TypeScript SDK (v1 `@modelcontextprotocol/sdk`, or v2 `@modelcontextprotocol/server`), with zod. It can be a long-running Node server or run on a serverless host such as Cloudflare Workers ([deploying](web-mode.md#deploying)). A low-level `Server` and other languages won't work.
+You need a server built on `McpServer` from the MCP TypeScript SDK v2 (`@modelcontextprotocol/server`), with zod 4. It can be a long-running Node server or run on a serverless host such as Cloudflare Workers ([deploying](web-mode.md#deploying)). A low-level `Server` and other languages won't work.
 
 The UI can only show what your tools return, so you need at least one tool that reads what people want to see. Supported versions are in `package.json`, and your package manager reports a mismatch when you install.
 

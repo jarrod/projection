@@ -155,7 +155,7 @@ A tool that fails can return `{ isError: true }` as agents expect. The UI shows 
 ```ts
 server.registerTool("decide", {
   description: "Approve or reject a request",
-  inputSchema: { id: z.number(), decision: z.enum(["approve", "reject"]) },
+  inputSchema: z.object({ id: z.number(), decision: z.enum(["approve", "reject"]) }),
 }, async ({ id, decision }) => {
   const a = approvals.find((x) => x.id === id);
   if (!a) return { ...text(`No approval #${id}`), isError: true };
@@ -340,17 +340,10 @@ if (process.env.UI_PORT) http.createServer((req, res) => ui.site!.node(req, res)
 **Streamable HTTP server on the same listener**:
 
 ```ts
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-http.createServer(async (req, res) => {
-  if (req.url?.startsWith("/mcp")) {
-    const server = createServer();                                   // calls ui.attach inside; set web.mcp to this endpoint
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-    res.on("close", () => { transport.close(); server.close(); });
-    await server.connect(transport);
-    return transport.handleRequest(req, res);
-  }
-  return ui.site!.node(req, res);
-}).listen(3000);
+import { createMcpHandler } from "@modelcontextprotocol/server";
+import { toNodeHandler } from "@modelcontextprotocol/node";
+const mcp = toNodeHandler(createMcpHandler(createServer));          // createServer calls ui.attach; set web.mcp to this endpoint
+http.createServer((req, res) => req.url?.startsWith("/mcp") ? mcp(req, res) : ui.site!.node(req, res)).listen(3000);
 ```
 
 **Express**: mount at the app root and before body parsers (the adapter reads the body itself, and Express strips mount paths from `req.url`).
@@ -370,8 +363,8 @@ if (response) return response;
 **Opening the UI**: the library registers a model-visible tool for you, `open_<name>_in_browser`; rename it with `web.tool`. Only if the caller asks for their own wording, register a new tool. That edits server code. Never add this to an existing tool:
 
 ```ts
-server.registerTool("share_ops", { description: "Open the operations dashboard in the user's browser" }, async (extra) => {
-  const r = await ui.openInBrowser(extra, { server, message: "Open the operations dashboard" });
+server.registerTool("share_ops", { description: "Open the operations dashboard in the user's browser" }, async (ctx) => {
+  const r = await ui.openInBrowser(ctx, { server, message: "Open the operations dashboard" });
   return text(r.opened ? "Opened in the browser." : r.declined ? "The user declined." : `Single-use link: ${r.url}`);
 });
 ```

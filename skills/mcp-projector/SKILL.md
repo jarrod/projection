@@ -7,7 +7,7 @@ description: Add mcp-projector to an existing Node.js MCP server, so people can 
 
 ## 1. Find the server and its tools
 
-Projector runs inside a long-lived Node server built on `McpServer` from the MCP TypeScript SDK. A low-level `Server` or another language won't work; say so before changing anything. Supported versions are in Projector's `package.json` (`engines` and `peerDependencies`), and the package manager reports a mismatch when you install.
+Projector runs inside a long-lived Node server built on `McpServer` from the MCP TypeScript SDK v2 (`@modelcontextprotocol/server`). SDK v1 (`@modelcontextprotocol/sdk`) is not supported: say so, since moving the server to v2 is a change to its code. A low-level `Server` or another language won't work; say so before changing anything. Supported versions are in Projector's `package.json` (`engines` and `peerDependencies`), and the package manager reports a mismatch when you install.
 
 Find where the server is created and where tools are registered. List each tool with what it does, whether it only reads or changes data, whether it is annotated `readOnlyHint`, and what it returns (`structuredContent`, or text only). Read the handler when that isn't clear; don't run it.
 
