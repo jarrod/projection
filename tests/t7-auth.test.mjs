@@ -1,6 +1,7 @@
 // The browser carries the agent's MCP auth and nothing else: real HTTP MCP servers with the SDK's own bearer auth,
 // a test token verifier, an agent over HTTP, and a browser driving ui.site. SDK v1 (Express middleware, stateless, and a
 // server that keeps sessions, which is refused) and v2 (fetch gate, createMcpHandler). Then auth that makes no authInfo.
+import { describe, test, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
 import { cpSync, mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -9,8 +10,6 @@ import { join, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 const ROOT = new URL("..", import.meta.url).pathname, HERE = join(ROOT, "tests/node_modules");
 const SDK1 = join(ROOT, "examples/notes-server/node_modules/@modelcontextprotocol/sdk/dist/esm"), NM1 = join(ROOT, "examples/notes-server/node_modules");
-let fails = 0;
-const ok = (c, m) => { console.log(c ? "PASS" : "FAIL", m); if (!c) fails++; };
 const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
 const SECRET = "auth-test-secret-".repeat(3), O = "https://a.test";
 
@@ -60,7 +59,7 @@ const v1 = async () => {
     });
     return { srv: await listen(app), sessions };
   };
-  return { McpServer, lib, serve, authOf: (x) => x.authInfo, sessions: true };
+  return { McpServer, lib, serve, authOf: (x) => x.authInfo };
 };
 
 const v2 = async () => {
@@ -89,8 +88,9 @@ const v2 = async () => {
   return { McpServer, lib, serve, authOf: (x) => x.http?.authInfo };
 };
 
-for (const [label, setup] of [["sdk v1", v1], ["server 2.4", v2]]) {
-  const S = await setup(), { defineUi, html, WEB_META } = S.lib, pass = (c, m) => ok(c, `[${label}] ${m}`);
+// The third value: the SDK has a session-keeping server pattern to try (v1 only).
+for (const [label, setup, hasSessions] of [["sdk v1", v1, true], ["server 2.4", v2, false]]) describe(label, () => {
+  let S, defineUi, html, WEB_META, ui, srv, sessions, MCP, mkUi;
   const db = {}, seen = [];
   let hits = [];
   const count = (q) => hits.push(`${q.method} ${q.url.split("?")[0]}`);
@@ -105,11 +105,6 @@ for (const [label, setup] of [["sdk v1", v1], ["server 2.4", v2]]) {
     s.registerTool("share", { description: "link" }, async (x) => ({ content: [{ type: "text", text: await ui.link(x) }] }));
     return s;
   };
-  let ui;
-  const { srv, sessions } = await S.serve(make, count), MCP = `http://127.0.0.1:${srv.address().port}`;
-  const mkUi = (path) => defineUi({ name: "a", web: { origin: O, secret: SECRET, mcp: MCP + path }, view: async ({ user, call }) => html`<p>${user}: ${(await call("mine")).content[0].text}</p>` });
-  ui = mkUi("/mcp");
-
   const agent = async (token) => {
     const c = new Client({ name: "agent", version: "1" });
     await c.connect(new StreamableHTTPClientTransport(new URL(MCP + "/mcp"), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
@@ -128,95 +123,188 @@ for (const [label, setup] of [["sdk v1", v1], ["server 2.4", v2]]) {
     tool: (n, body = {}) => ui.site.fetch(new Request(`${O}/ui/tool/${n}`, { method: "POST", headers: { cookie, "P-Req": "1" }, body: JSON.stringify(body) })),
   });
 
+  beforeAll(async () => {
+    S = await setup(); ({ defineUi, html, WEB_META } = S.lib);
+    ({ srv, sessions } = await S.serve(make, count)); MCP = `http://127.0.0.1:${srv.address().port}`;
+    mkUi = (path) => defineUi({ name: "a", web: { origin: O, secret: SECRET, mcp: MCP + path }, view: async ({ user, call }) => html`<p>${user}: ${(await call("mine")).content[0].text}</p>` });
+    ui = mkUi("/mcp");
+  });
+  afterAll(() => { srv?.closeAllConnections(); srv?.close(); });
+
   // (a) the page and clicks run as the token's user
-  const ta = issue("alice"), tb = issue("bob");
-  const A = await open(ta), B = await open(tb), a = browser(A.cookie), b = browser(B.cookie);
-  pass(/^https:\/\/a\.test\/ui\/l\//.test(A.link) && A.r.status === 303, "the agent's open tool, over authenticated HTTP, hands out a link that redeems");
-  seen.length = 0;
-  pass((await a.tool("add")).status === 200 && (db.alice ?? []).join() === "n" && !db.bob, "a click runs as the token's user");
-  pass((await (await a.page()).text()).includes("alice: n") && (await (await b.page()).text()).includes("bob: none"), "the page renders as the token's user; two users never share one");
+  let ta, A, a, b;
+  test("the agent's open tool, over authenticated HTTP, hands out a link that redeems", async () => {
+    ta = issue("alice"); const tb = issue("bob");
+    A = await open(ta); const B = await open(tb); a = browser(A.cookie); b = browser(B.cookie);
+    expect(A.link).toMatch(/^https:\/\/a\.test\/ui\/l\//);
+    expect(A.r.status).toBe(303);
+  });
+  test("a click runs as the token's user", async () => {
+    seen.length = 0;
+    expect((await a.tool("add")).status).toBe(200);
+    expect((db.alice ?? []).join()).toBe("n");
+    expect(db.bob).toBeUndefined();
+  });
+  test("the page renders as the token's user; two users never share one", async () => {
+    expect(await (await a.page()).text()).toContain("alice: n");
+    expect(await (await b.page()).text()).toContain("bob: none");
+  });
   // (d) tools see the real token
-  pass(seen[0]?.token === ta && seen[0].extra.sub === "alice" && seen[0].clientId === "agent-app", "tools get the authInfo the server's own verifier made, with the real token");
+  test("tools get the authInfo the server's own verifier made, with the real token", () => {
+    expect(seen[0]?.token).toBe(ta);
+    expect(seen[0].extra.sub).toBe("alice");
+    expect(seen[0].clientId).toBe("agent-app");
+  });
 
   // request count per check
-  hits = []; const s1 = await (await a.sync({})).json();
-  pass(s1.h && hits.join() === "POST /mcp", `one browser check is one MCP request (${hits.join(", ")})`);
-  hits = []; await a.sync({ h: s1.h }); await a.tool("mine");
-  pass(hits.length === 2, "a click is one MCP request too");
+  let s1;
+  test("one browser check is one MCP request", async () => {
+    hits = []; s1 = await (await a.sync({})).json();
+    expect(s1.h).toBeTruthy();
+    expect(hits).toEqual(["POST /mcp"]);
+  });
+  test("a click is one MCP request too", async () => {
+    hits = []; await a.sync({ h: s1.h }); await a.tool("mine");
+    expect(hits).toHaveLength(2);
+  });
 
   // (f) cookie flags
-  const sc = A.r.headers.get("set-cookie"), age = +/Max-Age=(\d+)/.exec(sc)[1];
-  pass(new RegExp(`^${ck}=[\\w-]+; Path=/; HttpOnly; SameSite=Strict; Max-Age=\\d+; Secure$`).test(sc), `cookie: ${sc.replace(/=[\w-]{20,}/, "=…")}`);
-  pass(age <= 600 && age >= 595, `Max-Age is the token's remaining life when shorter than sessionTtl (${age} s)`);
-  pass(A.r.headers.get("strict-transport-security") === "max-age=31536000", "HSTS on the https origin");
-  const tl = issue("lena", ["notes"], 7200), L = await open(tl);
-  pass(Math.abs(+/Max-Age=(\d+)/.exec(L.r.headers.get("set-cookie"))[1] - 3600) <= 1, "...and sessionTtl when the token lives longer");
+  test("cookie flags", () => {
+    expect(A.r.headers.get("set-cookie")).toMatch(new RegExp(`^${ck}=[\\w-]+; Path=/; HttpOnly; SameSite=Strict; Max-Age=\\d+; Secure$`));
+  });
+  test("Max-Age is the token's remaining life when shorter than sessionTtl", () => {
+    const age = +/Max-Age=(\d+)/.exec(A.r.headers.get("set-cookie"))[1];
+    expect(age).toBeLessThanOrEqual(600);
+    expect(age).toBeGreaterThanOrEqual(595);
+  });
+  test("HSTS on the https origin", () => {
+    expect(A.r.headers.get("strict-transport-security")).toBe("max-age=31536000");
+  });
+  test("...and sessionTtl when the token lives longer", async () => {
+    const L = await open(issue("lena", ["notes"], 7200));
+    expect(Math.abs(+/Max-Age=(\d+)/.exec(L.r.headers.get("set-cookie"))[1] - 3600)).toBeLessThanOrEqual(1);
+  });
 
   // (b) revocation: the very next sync and click fail, no grace
-  hits = [];
-  tokens.delete(ta);
-  const rs = await a.sync({}), rt = await a.tool("add"), rp = await a.page();
-  pass(rs.status === 401 && (await rs.json()).error === "unauthorized", "token revoked: the very next sync is 401 (the page reloads)");
-  pass(rt.status === 401 && db.alice.join() === "n", "...and the very next click is 401, and does not run");
-  pass(rp.status === 401 && /Ask the assistant/.test(await rp.text()), "...and the reload shows the ask-the-assistant gate");
-  pass(hits.length === 3, "each was refused by the server, not by a check of projector's own");
-  pass((await b.sync({})).status === 200, "another user's browser is unaffected");
+  let rs, rt, rp;
+  test("token revoked: the very next sync is 401 (the page reloads)", async () => {
+    hits = [];
+    tokens.delete(ta);
+    rs = await a.sync({}); rt = await a.tool("add"); rp = await a.page();
+    expect(rs.status).toBe(401);
+    expect((await rs.json()).error).toBe("unauthorized");
+  });
+  test("...and the very next click is 401, and does not run", () => {
+    expect(rt.status).toBe(401);
+    expect(db.alice.join()).toBe("n");
+  });
+  test("...and the reload shows the ask-the-assistant gate", async () => {
+    expect(rp.status).toBe(401);
+    expect(await rp.text()).toMatch(/Ask the assistant/);
+  });
+  test("each was refused by the server, not by a check of projector's own", () => {
+    expect(hits).toHaveLength(3);
+  });
+  test("another user's browser is unaffected", async () => {
+    expect((await b.sync({})).status).toBe(200);
+  });
 
   // (c) scope: the server's own checks, at its door and in a tool
-  const tc = issue("carol"), C = browser((await open(tc)).cookie);
-  const adm = await C.tool("admin");
-  pass(adm.status === 400 && /admin scope/.test((await adm.json()).error), "a tool's own scope check refuses the browser as it refuses the agent");
-  tokens.get(tc).scopes = [];
-  pass((await C.sync({})).status === 401 && (await C.tool("mine")).status === 401, "a token without the endpoint's required scope (403 there) is refused: 401 to the browser");
-  tokens.get(tc).scopes = ["notes"];
-  pass((await C.sync({})).status === 200, "...and works again once the server accepts it: projector keeps nothing of its own");
-  tokens.get(tc).exp = Math.floor(Date.now() / 1000) - 1;
-  pass((await C.sync({})).status === 401, "an expired token is refused by the server's check");
+  let tc, C;
+  test("a tool's own scope check refuses the browser as it refuses the agent", async () => {
+    tc = issue("carol"); C = browser((await open(tc)).cookie);
+    const adm = await C.tool("admin");
+    expect(adm.status).toBe(400);
+    expect((await adm.json()).error).toMatch(/admin scope/);
+  });
+  test("a token without the endpoint's required scope (403 there) is refused: 401 to the browser", async () => {
+    tokens.get(tc).scopes = [];
+    expect((await C.sync({})).status).toBe(401);
+    expect((await C.tool("mine")).status).toBe(401);
+  });
+  test("...and works again once the server accepts it: projector keeps nothing of its own", async () => {
+    tokens.get(tc).scopes = ["notes"];
+    expect((await C.sync({})).status).toBe(200);
+  });
+  test("an expired token is refused by the server's check", async () => {
+    tokens.get(tc).exp = Math.floor(Date.now() / 1000) - 1;
+    expect((await C.sync({})).status).toBe(401);
+  });
 
   // (e) the browser cannot mint links, through any tool
-  const td = issue("dave"), Dc = (await open(td)).cookie, D = browser(Dc), ag = await agent(td);
-  const o1 = await D.tool("open_a_in_browser"), o2 = await D.tool("share");
-  const t1 = await o1.text(), t2 = await o2.text();
-  pass(o1.status === 400 && /Not available/.test(t1) && !/\/ui\/l\//.test(t1), "the open tool refuses a browser call");
-  pass(o2.status === 400 && /Not available/.test(t2) && !/\/ui\/l\//.test(t2), "an integrator's tool that calls ui.link refuses a browser call too");
-  pass(/\/ui\/l\//.test(text(await ag.callTool({ name: "share", arguments: {} }))), "the same tool works for the agent");
-  const marked = await ag.callTool({ name: "share", arguments: {}, _meta: { [WEB_META]: 1 } });
-  pass(marked.isError && /Not available/.test(text(marked)), "a client that marks its own request as projector's only refuses itself");
-  pass((await D.tool("p_sync")).status === 404, "p_sync is not a /ui/tool/ route");
+  let Dc, D, ag;
+  test("the open tool refuses a browser call", async () => {
+    const td = issue("dave"); Dc = (await open(td)).cookie; D = browser(Dc); ag = await agent(td);
+    const o1 = await D.tool("open_a_in_browser"), t1 = await o1.text();
+    expect(o1.status).toBe(400);
+    expect(t1).toMatch(/Not available/);
+    expect(t1).not.toMatch(/\/ui\/l\//);
+  });
+  test("an integrator's tool that calls ui.link refuses a browser call too", async () => {
+    const o2 = await D.tool("share"), t2 = await o2.text();
+    expect(o2.status).toBe(400);
+    expect(t2).toMatch(/Not available/);
+    expect(t2).not.toMatch(/\/ui\/l\//);
+  });
+  test("the same tool works for the agent", async () => {
+    expect(text(await ag.callTool({ name: "share", arguments: {} }))).toMatch(/\/ui\/l\//);
+  });
+  test("a client that marks its own request as projector's only refuses itself", async () => {
+    const marked = await ag.callTool({ name: "share", arguments: {}, _meta: { [WEB_META]: 1 } });
+    expect(marked.isError).toBe(true);
+    expect(text(marked)).toMatch(/Not available/);
+  });
+  test("p_sync is not a /ui/tool/ route", async () => {
+    expect((await D.tool("p_sync")).status).toBe(404);
+  });
 
   // (g) tampered and replayed links, tampered cookies
-  const te = issue("erin"), link = text(await (await agent(te)).callTool({ name: "open_a_in_browser", arguments: {} })).match(/https:\S+/)[0];
+  let link;
   const redeem = (u) => ui.site.fetch(new Request(u, { method: "POST", headers: { "sec-fetch-site": "same-origin" } })).then((r) => r.status);
   const flip = (s, i) => s.slice(0, i) + (s[i] === "A" ? "B" : "A") + s.slice(i + 1);
-  pass(await redeem(flip(link, link.length - 10)) === 410, "a tampered link is refused");
-  pass(await redeem(link) === 303 && await redeem(link) === 410, "a link redeems once; a replay is refused");
-  pass((await browser(flip(Dc, Dc.length - 10)).page()).status === 401, "a tampered cookie is refused");
-  pass((await browser(`${ck}=${link.split("/l/")[1]}`).page()).status === 401, "a link is not a cookie");
+  test("a tampered link is refused", async () => {
+    link = text(await (await agent(issue("erin"))).callTool({ name: "open_a_in_browser", arguments: {} })).match(/https:\S+/)[0];
+    expect(await redeem(flip(link, link.length - 10))).toBe(410);
+  });
+  test("a link redeems once; a replay is refused", async () => {
+    expect(await redeem(link)).toBe(303);
+    expect(await redeem(link)).toBe(410);
+  });
+  test("a tampered cookie is refused", async () => {
+    expect((await browser(flip(Dc, Dc.length - 10)).page()).status).toBe(401);
+  });
+  test("a link is not a cookie", async () => {
+    expect((await browser(`${ck}=${link.split("/l/")[1]}`).page()).status).toBe(401);
+  });
 
   // a hosted origin needs web.mcp
-  pass(/Set web\.mcp/.test(await err(() => defineUi({ name: "bare", web: { origin: O, secret: SECRET }, view: () => html`x` }))), "web.origin without web.mcp: a clear error at defineUi");
+  test("web.origin without web.mcp: a clear error at defineUi", async () => {
+    expect(await err(() => defineUi({ name: "bare", web: { origin: O, secret: SECRET }, view: () => html`x` }))).toMatch(/Set web\.mcp/);
+  });
 
   // a server that keeps sessions is not supported: its 400 is an error, and no session is opened
-  if (S.sessions) {
-    ui = mkUi("/mcp-s");
-    const tf = issue("fay"), F = browser((await open(tf)).cookie);
-    hits = []; const fr = await F.sync({}), ft = await F.tool("add");
-    pass(fr.status === 500 && ft.status === 500 && !db.fay, "a web.mcp that keeps sessions: browser requests fail (500), and nothing runs");
-    pass(hits.join() === "POST /mcp-s,POST /mcp-s" && !Object.keys(sessions).length, `...at one request each, and no session is opened (${hits.join(", ")})`);
+  if (hasSessions) {
+    let fr, ft;
+    test("a web.mcp that keeps sessions: browser requests fail (500), and nothing runs", async () => {
+      ui = mkUi("/mcp-s");
+      const F = browser((await open(issue("fay"))).cookie);
+      hits = []; fr = await F.sync({}); ft = await F.tool("add");
+      expect(fr.status).toBe(500);
+      expect(ft.status).toBe(500);
+      expect(db.fay).toBeUndefined();
+    });
+    test("...at one request each, and no session is opened", () => {
+      expect(hits).toEqual(["POST /mcp-s", "POST /mcp-s"]);
+      expect(Object.keys(sessions)).toEqual([]);
+    });
   }
-  srv.closeAllConnections(); srv.close();
-}
+});
 
 // Auth that makes no authInfo (an API-key header, an IP allowlist): a link from such a request has no token, so a hosted
 // origin must send the browser through the server's own endpoint, where that same check runs on every call.
-{
-  const { McpServer } = await import(join(SDK1, "server/mcp.js"));
-  const { StreamableHTTPServerTransport } = await import(join(SDK1, "server/streamableHttp.js"));
-  const express = (await import(join(NM1, "express/index.js"))).default;
-  const { defineUi, html } = await import(join(ROOT, "dist/index.js"));
+describe("no authInfo", () => {
+  let McpServer, StreamableHTTPServerTransport, defineUi, html, ui, srv, M, byIp;
   const view = () => html`<p>ok</p>`;
-  let ui;
-  ok(/Set web\.mcp/.test(await err(() => defineUi({ name: "k", web: { origin: O, secret: SECRET }, view }))), "[no authInfo] web.origin without web.mcp is refused at defineUi: no in-process path past the server's auth");
   let deletes = 0;
   const keys = new Set(["key-1"]), ips = new Set(["127.0.0.1", "::ffff:127.0.0.1"]);
   const make = () => {
@@ -224,14 +312,6 @@ for (const [label, setup] of [["sdk v1", v1], ["server 2.4", v2]]) {
     s.registerTool("delete_all", { description: "admin" }, async () => { deletes++; return { content: [{ type: "text", text: "deleted" }] }; });
     return s;
   };
-  const app = express();
-  const mount = (path, gate) => app.post(path, express.json(), (q, r, next) => gate(q) ? next() : r.status(401).end(), async (q, r) => {
-    const t = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); r.on("close", () => t.close());
-    await make().connect(t); await t.handleRequest(q, r, q.body);
-  });
-  mount("/key", (q) => keys.has(q.headers["x-api-key"]));
-  mount("/ip", (q) => ips.has(q.socket.remoteAddress));
-  const srv = await listen(app), M = `http://127.0.0.1:${srv.address().port}`;
   const run = async (path, headers) => {
     ui = defineUi({ name: "k", web: { origin: O, secret: SECRET, mcp: M + path }, view });
     const c = new Client({ name: "agent", version: "1" });
@@ -240,14 +320,38 @@ for (const [label, setup] of [["sdk v1", v1], ["server 2.4", v2]]) {
     const cookie = (await ui.site.fetch(new Request(link, { method: "POST" }))).headers.get("set-cookie").split(";")[0];
     return () => ui.site.fetch(new Request(`${O}/ui/tool/delete_all`, { method: "POST", headers: { cookie, "P-Req": "1" }, body: "{}" })).then((r) => r.status);
   };
-  const byKey = await run("/key", { "x-api-key": "key-1" });
-  ok(await byKey() === 401 && deletes === 0, "[no authInfo] an API-key server: the browser's call goes through the key check, carries no key, and is refused (fails closed)");
-  const byIp = await run("/ip", {});
-  ok(await byIp() === 200 && deletes === 1, "[no authInfo] an IP-allowlist server: the browser's call goes through the allowlist and runs");
-  ips.clear();
-  ok(await byIp() === 401 && deletes === 1, "[no authInfo] ...and once the allowlist drops it, the very next call is refused and does not run");
-  srv.closeAllConnections(); srv.close();
-}
+  beforeAll(async () => {
+    ({ McpServer } = await import(join(SDK1, "server/mcp.js")));
+    ({ StreamableHTTPServerTransport } = await import(join(SDK1, "server/streamableHttp.js")));
+    const express = (await import(join(NM1, "express/index.js"))).default;
+    ({ defineUi, html } = await import(join(ROOT, "dist/index.js")));
+    const app = express();
+    const mount = (path, gate) => app.post(path, express.json(), (q, r, next) => gate(q) ? next() : r.status(401).end(), async (q, r) => {
+      const t = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); r.on("close", () => t.close());
+      await make().connect(t); await t.handleRequest(q, r, q.body);
+    });
+    mount("/key", (q) => keys.has(q.headers["x-api-key"]));
+    mount("/ip", (q) => ips.has(q.socket.remoteAddress));
+    srv = await listen(app); M = `http://127.0.0.1:${srv.address().port}`;
+  });
+  afterAll(() => { srv?.closeAllConnections(); srv?.close(); });
 
-console.log(fails ? `\n${fails} FAILED` : "\nall auth checks passed");
-process.exit(fails ? 1 : 0);
+  test("web.origin without web.mcp is refused at defineUi: no in-process path past the server's auth", async () => {
+    expect(await err(() => defineUi({ name: "k", web: { origin: O, secret: SECRET }, view }))).toMatch(/Set web\.mcp/);
+  });
+  test("an API-key server: the browser's call goes through the key check, carries no key, and is refused (fails closed)", async () => {
+    const byKey = await run("/key", { "x-api-key": "key-1" });
+    expect(await byKey()).toBe(401);
+    expect(deletes).toBe(0);
+  });
+  test("an IP-allowlist server: the browser's call goes through the allowlist and runs", async () => {
+    byIp = await run("/ip", {});
+    expect(await byIp()).toBe(200);
+    expect(deletes).toBe(1);
+  });
+  test("...and once the allowlist drops it, the very next call is refused and does not run", async () => {
+    ips.clear();
+    expect(await byIp()).toBe(401);
+    expect(deletes).toBe(1);
+  });
+});
