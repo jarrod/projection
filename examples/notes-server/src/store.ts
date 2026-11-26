@@ -2,7 +2,7 @@ export type Note = { id: number; title: string; body: string; pinned: boolean };
 
 // Notes are kept per user. The server's own code knows nothing of projector: it reads the user from the MCP request,
 // which is what projector's default identify() reads too, so tools and UI agree.
-export const userOf = (extra: any) => String(extra?.authInfo?.extra?.sub ?? "local");
+export const userOf = (ctx: any) => String(ctx?.http?.authInfo?.extra?.sub ?? "local");
 const all = new Map<string, Note[]>();
 const of = (user: string) => all.get(user) ?? (all.set(user, []), all.get(user)!);
 

@@ -5,7 +5,7 @@ Library: `mcp-projector`. It adds a live, styled UI for humans to an MCP server.
 - **Read `AGENTS.md` first.** It has the integration and the gotchas. The full API is the documented types in `src/`; human docs are in `docs/`.
 - Layout: library in `src/` (`ui.ts` core and MCP attach, `web.ts` web mode, `ui/` components and CSS) and `src/client/` (browser runtime, bundled into `dist/assets.js` by `build.mjs`). Example integration in `examples/notes-server/`. End-to-end tests in `tests/`.
 - Build: `npm install && npm run build`. The build fails if a size budget is exceeded. Don't raise a budget without a reason.
-- Test: `npm test` (agent snapshot, then the Vitest `unit` project: `tests/t{1,2,4,5,7}-*.test.mjs`). `npm run test:web` runs real Chrome via `playwright-core` (uses your installed Chrome, or set `CHROME_PATH`; needs port 3000 free). `npm run test:workers` runs the Worker example under `wrangler dev`. In `tests/`: `npx vitest run t5 -t "claim"` runs one file or test, `npm run watch` reruns on change. Child processes get `childEnv()` from `tests/child-env.mjs`, since Vitest sets `DEV` and `NODE_ENV=test`.
+- Test: `npm test` (agent snapshot, then the Vitest `unit` project: `tests/t{1,2,4,5,7}-*.test.mjs`). `npm run test:web` runs real Chrome via `playwright-core` (uses your installed Chrome, or set `CHROME_PATH`; needs port 3000 free). `npm run test:workers` runs the Worker example under `wrangler dev`. `npx vitest run t5 -t "claim"` runs one file or test, `npm run test:watch` reruns on change. Child processes get `childEnv()` from `tests/child-env.mjs`, since Vitest sets `DEV` and `NODE_ENV=test`.
 - Dev loop: `node tests/dev.mjs`, then open http://localhost:3000/dev. Edits to `src/` or the example rebuild (about 1 s), restart with seed data, and the open page reloads itself.
 - Invariants:
   - Agent tool results never change. `npm test` diffs `tests/agent-snapshot.mjs` output against `tests/baseline.json`.
@@ -22,7 +22,7 @@ Library: `mcp-projector`. It adds a live, styled UI for humans to an MCP server.
 - Not yet run inside a real host (Claude, ChatGPT, VS Code). Unverified there: that `visibility: ["app"]` is honoured.
 - Pages check every `poll` seconds (default 5), so others' changes take up to that long, and every check runs the view's read tools.
 - The cookie keeps the agent's token until `web.sessionTtl` or the token's expiry. A revoked token is refused by the server on the next request; a refreshed agent token is not passed on, so the browser needs a new link when the old token expires.
-- `web.mcp` must be a stateless MCP endpoint; servers that keep MCP sessions mount one beside their main route. v2 servers that accept only the 2026-07-28 protocol are not supported yet for browser calls.
+- `web.mcp` must be a stateless MCP endpoint; servers that keep MCP sessions mount one beside their main route. Servers that accept only the 2026-07-28 protocol (`createMcpHandler` with `legacy: "reject"`) are not supported yet for browser calls.
 - Browser requests reach `web.mcp` from projector, not from the browser: the server must authorise them by token, not by network source.
 - The default `web.claim` is per process: with several instances or on serverless, links are single-use only if the integrator backs `claim` with shared storage.
 - The single-use link is a pre-authenticated URL carrying the agent's token, which the MCP elicitation spec says servers must not send. Kept on purpose: the person acts as the agent and never signs in; see `docs/web-mode.md`.

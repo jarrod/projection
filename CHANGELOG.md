@@ -12,7 +12,7 @@
 - Removed `ui.site.revoke(user)`: access ends when the server refuses the agent's token.
 - `ui.link(extra)` is async and no longer takes the server. A used link still shows its Continue page; pressing Continue says it has expired.
 - Tool handlers no longer need `ui.identify(extra)`: tools called from the UI get the same `authInfo` as when the agent calls them.
-- Supports the MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.3.1 and later) as well as v1. On the 2026-07-28 protocol a server can't ask the client to open a URL, so `open_<name>_in_browser` returns the link as text. With v2, use zod 4.
+- Requires the MCP TypeScript SDK v2: `@modelcontextprotocol/server` 2.4 or later, with zod 4.2 or later. SDK v1 (`@modelcontextprotocol/sdk`) is no longer supported. Tool handlers read auth from their context, `ctx.http.authInfo`. `mcp-projector/testing` uses `@modelcontextprotocol/client`. On the 2026-07-28 protocol a server can't ask the client to open a URL, so `open_<name>_in_browser` returns the link as text.
 - Loads without Node built-ins and does no work at import time.
 - `attach` errors say whether the tool was registered too early or the SDK isn't supported.
 - Renamed from `mcp-projection` to `mcp-projector`: the package, its imports, the command and the skill. Nothing else in the API changed.

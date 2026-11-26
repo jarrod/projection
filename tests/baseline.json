@@ -17,7 +17,7 @@
      "title",
      "body"
     ],
-    "$schema": "http://json-schema.org/draft-07/schema#"
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
    }
   },
   {
@@ -26,7 +26,7 @@
    "inputSchema": {
     "type": "object",
     "properties": {},
-    "$schema": "http://json-schema.org/draft-07/schema#"
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
    }
   },
   {
@@ -42,7 +42,7 @@
     "required": [
      "id"
     ],
-    "$schema": "http://json-schema.org/draft-07/schema#"
+    "$schema": "https://json-schema.org/draft/2020-12/schema"
    }
   }
  ],
@@ -96,7 +96,7 @@
    "content": [
     {
      "type": "text",
-     "text": "MCP error -32602: Input validation error: Invalid arguments for tool add_note: Invalid input: expected string, received number at title\nInvalid input: expected string, received undefined at body"
+     "text": "Input validation error: Invalid arguments for tool add_note: title: Invalid input: expected string, received number, body: Invalid input: expected string, received undefined"
     }
    ],
    "structuredContent": null,

@@ -8,9 +8,9 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 60_000,
     projects: [
-      { extends: true, test: { name: "unit", include: ["t*.test.mjs"], exclude: ["t3-web.test.mjs", "t6-workers.test.mjs"] } },
-      { extends: true, test: { name: "web", include: ["t3-web.test.mjs"] } },
-      { extends: true, test: { name: "workers", include: ["t6-workers.test.mjs"] } },
+      { extends: true, test: { name: "unit", include: ["tests/t*.test.mjs"], exclude: ["tests/t3-web.test.mjs", "tests/t6-workers.test.mjs"] } },
+      { extends: true, test: { name: "web", include: ["tests/t3-web.test.mjs"] } },
+      { extends: true, test: { name: "workers", include: ["tests/t6-workers.test.mjs"] } },
     ],
   },
 });

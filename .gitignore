@@ -1,5 +1,3 @@
 node_modules
 dist
 *.tgz
-tests/shot-*.png
-tests/after*.json

@@ -6,7 +6,7 @@ Web mode serves the same UI on a normal URL. It's on by default, because in apps
 
 ## What the agent sees
 
-Every UI adds one tool the model can see, `open_<name>_in_browser`, whose description says to use it when the person wants to see or change things themselves. When called, it asks the client to open the link, so the link doesn't pass through the model. Clients that can't do that, or whose prompt fails or times out, get the link back as text, with instructions to share it. To send a link from one of your own tools instead, call `ui.openInBrowser(extra, { server })`.
+Every UI adds one tool the model can see, `open_<name>_in_browser`, whose description says to use it when the person wants to see or change things themselves. When called, it asks the client to open the link, so the link doesn't pass through the model. Clients that can't do that, or whose prompt fails or times out, get the link back as text, with instructions to share it. To send a link from one of your own tools instead, call `ui.openInBrowser(ctx, { server })` with the tool handler's context.
 
 ## Local servers: nothing to set up
 

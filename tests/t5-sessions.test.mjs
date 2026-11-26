@@ -2,12 +2,9 @@
 // single use is web.claim. Every browser request goes to the server's own MCP endpoint (here in process) with that token.
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
 const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-const SDK = `${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm`;
 const { defineUi, html } = await import(`${NS}/node_modules/mcp-projector/dist/index.js`);
-const { McpServer } = await import(`${SDK}/server/mcp.js`);
-const { WebStandardStreamableHTTPServerTransport } = await import(`${SDK}/server/webStandardStreamableHttp.js`);
-const { Client } = await import(`${SDK}/client/index.js`);
-const { InMemoryTransport } = await import(`${SDK}/inMemory.js`);
+import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
 
 const O = "https://s.test", SECRET = "test-secret-".repeat(4), now = Date.now;
@@ -16,15 +13,13 @@ afterAll(() => { Date.now = now; });
 /** Run fn with the clock moved ms ahead; it always moves back, even when a check fails. */
 const later = async (ms, fn) => { skew = ms; try { return await fn(); } finally { skew = 0; } };
 const db = {}, seen = [];
-const as = (sub, more = {}) => ({ authInfo: { token: "bearer-" + sub, clientId: "app", scopes: [], extra: { sub }, ...more } });
+const as = (sub, more = {}) => ({ http: { authInfo: { token: "bearer-" + sub, clientId: "app", scopes: [], extra: { sub }, ...more } } });
 
 /** The server's MCP endpoint: stateless, with its own bearer check ("bearer-<sub>" is that user's token). */
 const endpoint = (make) => async (req) => {
   const m = /^Bearer (bearer-(\w+))$/.exec(req.headers.get("authorization") ?? "");
   if (!m) return new Response(null, { status: 401 });
-  const t = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  await make().connect(t);
-  return t.handleRequest(req, { authInfo: { token: m[1], clientId: "app", scopes: [], expiresAt: Math.floor(Date.now() / 1000) + 3600, extra: { sub: m[2] } } });
+  return createMcpHandler(make).fetch(req, { authInfo: { token: m[1], clientId: "app", scopes: [], expiresAt: Math.floor(Date.now() / 1000) + 3600, extra: { sub: m[2] } } });
 };
 /** One app: a ui and a server factory, as a serverless integrator would write them. */
 const app = ({ name = "s", web = {} } = {}) => {
@@ -33,9 +28,9 @@ const app = ({ name = "s", web = {} } = {}) => {
     view: async ({ user, call }) => html`<p>${user}: ${(await call("mine")).content[0].text}</p>` });
   a.make = () => {
     const s = a.ui.attach(new McpServer({ name, version: "1" }));
-    const sub = (x) => x.authInfo?.extra?.sub ?? "local";
+    const sub = (x) => x.http?.authInfo?.extra?.sub ?? "local";
     s.registerTool("mine", { description: "read", annotations: { readOnlyHint: true } }, async (x) => ({ content: [{ type: "text", text: (db[sub(x)] ?? []).join() || "none" }] }));
-    s.registerTool("add", { description: "write" }, async (x) => { seen.push(x.authInfo); (db[sub(x)] ??= []).push(name); return { content: [{ type: "text", text: "added" }] }; });
+    s.registerTool("add", { description: "write" }, async (x) => { seen.push(x.http?.authInfo); (db[sub(x)] ??= []).push(name); return { content: [{ type: "text", text: "added" }] }; });
     return s;
   };
   const site = a.ui.site, o = web.origin ?? O;
@@ -352,9 +347,7 @@ describe("browser sessions run tools as the token's user, through the server's e
     const heard = [], N = {};
     N.ui = defineUi({ name: "n", web: { origin: O, secret: SECRET, mcp: async (req) => {
       heard.push(req.headers.get("authorization"));
-      const t = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-      await N.ui.attach(new McpServer({ name: "n", version: "1" })).connect(t);
-      return t.handleRequest(req);
+      return createMcpHandler(() => N.ui.attach(new McpServer({ name: "n", version: "1" }))).fetch(req);
     } }, view: ({ user }) => html`<p>${user}</p>` });
     const nc = (await N.ui.site.fetch(new Request(await N.ui.link({}), { method: "POST" }))).headers.get("set-cookie").split(";")[0];
     const np = await N.ui.site.fetch(new Request(`${O}/ui/`, { headers: { cookie: nc } }));

@@ -9,14 +9,13 @@ const agent = async (name, args = {}) => (await fetch(BASE + "/agent", { method:
 const status = async (path, init) => (await fetch(BASE + path, { redirect: "manual", ...init })).status;
 let srv, browser, ctx, page, url;
 const errors = [];
-const shot = (name, opts) => page.screenshot({ path: `${HERE}shot-${name}.png`, ...opts });
 
 beforeAll(async () => {
   // Not Vitest's env: its DEV would turn on web-server.mjs's dev mode (seed data, /dev sign-in).
   srv = spawn("node", [HERE + "web-server.mjs"], { stdio: ["ignore", "pipe", "inherit"], env: childEnv() });
   await new Promise((res, rej) => { srv.stdout.once("data", (d) => String(d).trim() === "ready" ? res() : rej(new Error(String(d)))); srv.once("exit", () => rej(new Error("web-server.mjs exited: is port 3000 in use?"))); });
   browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH, args: ["--no-sandbox"] } : { channel: "chrome" });
-  ctx = await browser.newContext({ viewport: { width: 1040, height: 760 }, deviceScaleFactor: 2 });
+  ctx = await browser.newContext({ viewport: { width: 1040, height: 760 } });
   // Pages check every 5 s by default; this test's pages check every 200 ms so it runs quickly.
   await ctx.route("**/ui/", async (route) => {
     const res = await route.fetch();
@@ -51,7 +50,6 @@ describe("a session in the browser", () => {
   test("GET on link shows Continue page (unfurlers can't burn it)", async () => {
     await page.goto(url);
     expect(await page.locator("text=Open notes").isVisible()).toBe(true);
-    await shot("gate");
   });
   test("POST redeemed link → session cookie → app", async () => {
     await page.click("text=Continue");
@@ -113,19 +111,6 @@ describe("a session in the browser", () => {
   });
 });
 
-// Screenshots for the docs (shot-*.png): steps, not checks, taken once the notes above exist.
-const screenshots = async () => {
-    await page.mouse.move(0, 0); await page.waitForTimeout(1000);
-    await shot("light", { fullPage: true });
-    await page.click("text=New note >> nth=0"); await page.waitForSelector("#new-note:popover-open"); await page.fill("#new-note input[name=title]", "Draft…");
-    await page.waitForTimeout(400);
-    await shot("dialog");
-    await page.keyboard.press("Escape"); await page.evaluate("document.activeElement.blur()");
-    await page.emulateMedia({ colorScheme: "dark" }); await page.mouse.move(0, 0); await page.waitForTimeout(500);
-    await shot("dark", { fullPage: true });
-    await page.emulateMedia({ colorScheme: "light" });
-};
-
 // The cadence: the page state asks for poll: 400 ms here; every /ui/sync is answered at once by the server.
 describe("the cadence", () => {
   let p2, slow = false, poll = 400, k;
@@ -133,7 +118,6 @@ describe("the cadence", () => {
   const gapsOf = (list) => list.slice(1).map((c, i) => c.t - list[i].t);
   const hide = (h) => p2.evaluate((h) => { Object.defineProperty(document, "hidden", { get: () => h, configurable: true }); document.dispatchEvent(new Event("visibilitychange")); }, h);
   beforeAll(async () => {
-    await screenshots();
     p2 = await ctx.newPage();
     await p2.route("**/ui/", async (route) => {
       const res = await route.fetch();

@@ -44,7 +44,7 @@ export type UiOptions = {
   css?: string;
   /** Skip the built-in kit CSS entirely. */
   bare?: boolean;
-  /** Map an MCP request to a stable user id. Default: authInfo.extra.sub, or "local" when the request carries no auth.
+  /** Map an MCP request to a stable user id. Default: the context's http.authInfo.extra.sub, or "local" when the request carries no auth.
    *  An authenticated request with no subject throws: a client id names the agent app, not the person using it. */
   identify?: (extra: any) => string;
   /** Override the ui:// URI. */
@@ -61,15 +61,10 @@ export type UiOptions = {
 };
 
 type Auth = { token?: string; clientId?: string; expiresAt?: number; extra?: Record<string, unknown> };
-/** The part of the second argument of a tool handler that this library reads: `extra` in SDK v1, the context in SDK v2. */
+/** The part of a tool handler's context (its second argument) that this library reads. */
 export type Extra = {
-  authInfo?: Auth;
-  requestId?: string | number;
-  signal?: AbortSignal;
   mcpReq?: { id?: string | number; signal?: AbortSignal; envelope?: object; _meta?: Record<string, unknown> };
   http?: { authInfo?: Auth; req?: Request };
-  requestInfo?: { headers: any };
-  _meta?: Record<string, unknown>;
   [FROM_WEB]?: true;
 };
 type ToolCall = (request: any, extra: any) => Promise<any>;
@@ -81,12 +76,12 @@ const hash = (s: string) => {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0).toString(36);
 };
-const auth = (x?: Extra) => (x?.http ?? x as Extra | undefined)?.authInfo;
-// In the 2026-07-28 protocol (v2 only) every request carries its client's capabilities; before it they belong to the connection.
+const auth = (x?: Extra) => x?.http?.authInfo;
+// In the 2026-07-28 protocol every request carries its client's capabilities; before it they belong to the connection.
 const caps = (x: Extra, inner: any) => (x?.mcpReq?.envelope as any)?.["io.modelcontextprotocol/clientCapabilities"] ?? inner.getClientCapabilities();
 const no = (): never => { throw new Error("Not available from the web UI."); };
-// Made for a browser or a view: in process (the symbol), or over MCP (the _meta projector's proxy sets: v1 extra, v2 mcpReq).
-const fromWeb = (x?: Extra) => !!(x?.[FROM_WEB] || (x?.mcpReq?._meta ?? x?._meta)?.[WEB_META]);
+// Made for a browser or a view: in process (the symbol), or over MCP (the _meta projector's proxy sets).
+const fromWeb = (x?: Extra) => !!(x?.[FROM_WEB] || x?.mcpReq?._meta?.[WEB_META]);
 const refuse = async () => no(), ignore = async () => {};
 
 export function defineUi(o: UiOptions) {
@@ -137,10 +132,9 @@ export function defineUi(o: UiOptions) {
     server.registerTool = (name: string, cfg: any, ...rest: any[]) => { if (cfg.annotations?.readOnlyHint) readOnly.add(name); return reg(name, cfg, ...rest); };
 
     // The one seam: the server's own tools/call handler is kept, so UI calls run exactly what agent calls run.
-    // v2 also takes (method, schemas, handler), where the handler gets the params instead of the request.
-    inner.setRequestHandler = (schema: any, ...a: any[]) => {
-      // v1 names the method with a zod schema, v2 with the name itself.
-      const m = schema.shape?.method?.value ?? schema, next: ToolCall = a.pop();
+    // It is also registered as (method, schemas, handler), where the handler gets the params instead of the request.
+    inner.setRequestHandler = (m: string, ...a: any[]) => {
+      const next: ToolCall = a.pop();
       let h = next;
       seen = true;
       if (m === "tools/call") calls.set(server, (req, extra) => next(a[0] ? req.params : req, extra));
@@ -154,7 +148,7 @@ export function defineUi(o: UiOptions) {
         }
         return r;
       };
-      return set(schema, ...a, h);
+      return set(m, ...a, h);
     };
 
     readers.set(server, readOnly);
@@ -196,13 +190,12 @@ export function defineUi(o: UiOptions) {
   /** Run a tool through the server's own tools/call handler, in process: inside the MCP request `x` (a view's read),
    *  or, with none, as a local browser call without auth. It can never ask the client anything, nor mint a link. */
   const caller = (server: object, x: any = {}) => async (name: string, args: unknown) => {
-    const call = calls.get(server)!, id = crypto.randomUUID(), signal = x.signal ?? new AbortController().signal, method = "tools/call";
-    // Both shapes at once: v1 handlers read the first line, v2 handlers `mcpReq` and `http`.
+    const call = calls.get(server)!, id = crypto.randomUUID(), signal = x.mcpReq?.signal ?? new AbortController().signal, method = "tools/call";
     const r = await call({ method, params: { name, arguments: args } }, {
-      sendNotification: ignore, ...x, [FROM_WEB]: true, requestId: id, signal, sendRequest: refuse,
+      ...x, [FROM_WEB]: true,
       mcpReq: { requestState: () => {}, notify: ignore, log: ignore, ...x.mcpReq, id, method, signal, send: refuse, elicitInput: refuse, requestSampling: refuse },
     });
-    // v2: the tool wants to ask the client something first, so it has not run.
+    // The tool wants to ask the client something first, so it has not run.
     return r?.resultType === "input_required" ? no() : r;
   };
   /** What a view's `call` does: the same, for read tools only, so rendering a view can never change data. */
@@ -229,7 +222,7 @@ export function defineUi(o: UiOptions) {
    *  `server` is the attached McpServer handling this request. */
   async function openInBrowser(extra: Extra, opts: { message?: string; server: ServerLike }) {
     // Over the network with no origin set, a 127.0.0.1 link would only work on the server's own machine.
-    const req = extra?.http?.req, host = req ? req.headers.get("host") ?? new URL(req.url).host : extra?.requestInfo?.headers.host;
+    const req = extra?.http?.req, host = req && (req.headers.get("host") ?? new URL(req.url).host);
     if (w && !w.origin && host && !/^(localhost|127(\.\d+){3}|\[::1\])(:\d+)?$/.test(host)) throw new Error("Set web.origin: this user is remote.");
     await site?.listen();
     const s = opts?.server?.server;
@@ -238,7 +231,7 @@ export function defineUi(o: UiOptions) {
     let opened = false, declined = false;
     if (caps(extra, s)?.elicitation?.url) try {
       opened = (await s.elicitInput({ mode: "url", message: opts.message ?? `Open ${o.name} in your browser`, url, elicitationId: crypto.randomUUID() },
-        { relatedRequestId: extra?.requestId ?? extra?.mcpReq?.id })).action === "accept";
+        { relatedRequestId: extra?.mcpReq?.id })).action === "accept";
       declined = !opened;
     } catch {} // timed out, failed, or a protocol where a server cannot ask (2026-07-28): hand back the link instead
     return { opened, declined, url };

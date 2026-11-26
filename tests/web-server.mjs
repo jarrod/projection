@@ -1,9 +1,7 @@
 // Runs the notes MCP server + its web UI, and an "agent" MCP client that supports URL elicitation.
 import http from "node:http";
 const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
-const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
-const { ElicitRequestSchema } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js`);
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 process.env.UI_ORIGIN ??= "http://localhost:3000"; // this file serves ui.site.node there
 process.env.UI_SECRET ??= "test-only-secret-never-use-in-production-0123";
 const { createServer } = await import(`${NS}/dist/server.js`);
@@ -13,7 +11,7 @@ const [a, b] = InMemoryTransport.createLinkedPair();
 await createServer().connect(b);
 const agent = new Client({ name: "agent", version: "1" }, { capabilities: { elicitation: { form: {}, url: {} } } });
 let lastUrl = null;
-agent.setRequestHandler(ElicitRequestSchema, async (req) => { lastUrl = req.params.url; return { action: "accept" }; });
+agent.setRequestHandler("elicitation/create", async (req) => { lastUrl = req.params.url; return { action: "accept" }; });
 await agent.connect(a);
 
 // DEV=1 (set by dev.mjs): seed notes, and /dev signs the browser in without the Continue page.

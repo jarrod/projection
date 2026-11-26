@@ -1,20 +1,14 @@
 // The browser carries the agent's MCP auth and nothing else: real HTTP MCP servers with the SDK's own bearer auth,
-// a test token verifier, an agent over HTTP, and a browser driving ui.site. SDK v1 (Express middleware, stateless, and a
-// server that keeps sessions, which is refused) and v2 (fetch gate, createMcpHandler). Then auth that makes no authInfo.
+// a test token verifier, an agent over HTTP, and a browser driving ui.site. A stateless endpoint (fetch gate,
+// createMcpHandler) and one that keeps sessions, which is refused. Then auth that makes no authInfo.
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
-import { cpSync, mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
-import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-const ROOT = new URL("..", import.meta.url).pathname, HERE = join(ROOT, "tests/node_modules");
-const SDK1 = join(ROOT, "examples/notes-server/node_modules/@modelcontextprotocol/sdk/dist/esm"), NM1 = join(ROOT, "examples/notes-server/node_modules");
+import { McpServer, createMcpHandler, requireBearerAuth, OAuthError, WebStandardStreamableHTTPServerTransport, isInitializeRequest } from "@modelcontextprotocol/server";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import * as lib from "../dist/index.js";
 const err = async (fn) => { try { await fn(); return ""; } catch (e) { return e.message; } };
 const SECRET = "auth-test-secret-".repeat(3), O = "https://a.test";
-
-const { Client } = await import(join(SDK1, "client/index.js"));
-const { StreamableHTTPClientTransport } = await import(join(SDK1, "client/streamableHttp.js"));
 
 // Tokens the verifier knows. Changing an entry is the authorization server revoking or narrowing a token.
 const tokens = new Map();
@@ -25,71 +19,42 @@ const verified = (token) => {
 };
 
 const listen = (handler) => new Promise((ok) => { const s = http.createServer(handler).listen(0, "127.0.0.1", () => ok(s)); });
+// Node's request as a fetch Request, and a fetch Response back onto Node's response.
+const toRequest = async (q) => {
+  const chunks = []; for await (const c of q) chunks.push(c);
+  return new Request(`http://${q.headers.host}${q.url}`, { method: q.method, headers: q.headers, body: chunks.length ? Buffer.concat(chunks) : undefined });
+};
+const send = async (r, res) => { r.writeHead(res.status, Object.fromEntries(res.headers)); r.end(Buffer.from(await res.arrayBuffer())); };
 
-const v1 = async () => {
-  const { McpServer } = await import(join(SDK1, "server/mcp.js"));
-  const { StreamableHTTPServerTransport } = await import(join(SDK1, "server/streamableHttp.js"));
-  const { requireBearerAuth } = await import(join(SDK1, "server/auth/middleware/bearerAuth.js"));
-  const { InvalidTokenError } = await import(join(SDK1, "server/auth/errors.js"));
-  const { isInitializeRequest } = await import(join(SDK1, "types.js"));
-  const express = (await import(join(NM1, "express/index.js"))).default;
-  const lib = await import(join(ROOT, "dist/index.js"));
-  const verifier = { verifyAccessToken: async (t) => verified(t) ?? (() => { throw new InvalidTokenError("unknown or revoked"); })() };
-  /** An Express app with the SDK's bearer middleware in front of /mcp (stateless) and /mcp-s (sessions). */
+const v2 = async () => {
+  const verifier = { verifyAccessToken: async (t) => verified(t) ?? (() => { throw new OAuthError("invalid_token", "unknown or revoked"); })() };
+  /** The SDK's bearer gate in front of /mcp (stateless) and /mcp-s (sessions). */
   const serve = async (make, count) => {
-    const app = express(), auth = requireBearerAuth({ verifier, requiredScopes: ["notes"] }), sessions = {};
-    app.use((q, _r, next) => { count(q); next(); });
-    app.post("/mcp", express.json(), auth, async (req, res) => {
-      const t = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-      res.on("close", () => t.close());
-      await make().connect(t);
-      await t.handleRequest(req, res, req.body);
-    });
+    const gate = requireBearerAuth({ verifier, requiredScopes: ["notes"] }), handler = createMcpHandler(make), sessions = {};
     // The SDK's own pattern for a server that keeps sessions.
-    app.all("/mcp-s", express.json(), auth, async (req, res) => {
-      const sid = req.headers["mcp-session-id"];
+    const withSessions = async (req, authInfo) => {
+      const sid = req.headers.get("mcp-session-id");
       let t = sid && sessions[sid];
-      if (!t && !sid && req.method === "POST" && isInitializeRequest(req.body)) {
-        t = new StreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, onsessioninitialized: (id) => { sessions[id] = t; } });
+      const body = req.method === "POST" ? await req.clone().json().catch(() => undefined) : undefined;
+      if (!t && !sid && req.method === "POST" && isInitializeRequest(body)) {
+        t = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, onsessioninitialized: (id) => { sessions[id] = t; } });
         t.onclose = () => { delete sessions[t.sessionId]; };
         await make().connect(t);
       }
-      if (!t) return res.status(400).json({ jsonrpc: "2.0", error: { code: -32000, message: "Bad Request: No valid session ID provided" }, id: null });
-      await t.handleRequest(req, res, req.body);
-    });
-    return { srv: await listen(app), sessions };
-  };
-  return { McpServer, lib, serve, authOf: (x) => x.authInfo };
-};
-
-const v2 = async () => {
-  // A copy of the library in a project with v2 only, as in t4.
-  const dir = mkdtempSync(join(tmpdir(), "projector-auth-v2-")), mods = join(dir, "node_modules");
-  mkdirSync(join(mods, "@modelcontextprotocol"), { recursive: true });
-  cpSync(join(ROOT, "dist"), join(dir, "dist"), { recursive: true });
-  cpSync(join(ROOT, "package.json"), join(dir, "package.json"));
-  symlinkSync(join(HERE, "@modelcontextprotocol/server"), join(mods, "@modelcontextprotocol/server"));
-  symlinkSync(join(HERE, "zod"), join(mods, "zod"));
-  const require = createRequire(join(dir, "dist/x.js"));
-  const { McpServer, createMcpHandler, requireBearerAuth, OAuthError } = await import(join(dirname(require.resolve("@modelcontextprotocol/server")), "index.mjs"));
-  const lib = await import(join(dir, "dist/index.js"));
-  const verifier = { verifyAccessToken: async (t) => verified(t) ?? (() => { throw new OAuthError("invalid_token", "unknown or revoked"); })() };
-  const serve = async (make, count) => {
-    const gate = requireBearerAuth({ verifier, requiredScopes: ["notes"] }), handler = createMcpHandler(make);
+      if (!t) return Response.json({ jsonrpc: "2.0", error: { code: -32000, message: "Bad Request: No valid session ID provided" }, id: null }, { status: 400 });
+      return t.handleRequest(req, { authInfo });
+    };
     const srv = await listen(async (q, r) => {
       count(q);
-      const chunks = []; for await (const c of q) chunks.push(c);
-      const req = new Request(`http://${q.headers.host}${q.url}`, { method: q.method, headers: q.headers, body: chunks.length ? Buffer.concat(chunks) : undefined });
-      const a = await gate(req), res = a instanceof Response ? a : await handler.fetch(req, { authInfo: a });
-      r.writeHead(res.status, Object.fromEntries(res.headers)); r.end(Buffer.from(await res.arrayBuffer()));
+      const req = await toRequest(q), a = await gate(req);
+      await send(r, a instanceof Response ? a : q.url.startsWith("/mcp-s") ? await withSessions(req, a) : await handler.fetch(req, { authInfo: a }));
     });
-    return { srv };
+    return { srv, sessions };
   };
   return { McpServer, lib, serve, authOf: (x) => x.http?.authInfo };
 };
 
-// The third value: the SDK has a session-keeping server pattern to try (v1 only).
-for (const [label, setup, hasSessions] of [["sdk v1", v1, true], ["server 2.4", v2, false]]) describe(label, () => {
+describe("server 2.4", () => {
   let S, defineUi, html, WEB_META, ui, srv, sessions, MCP, mkUi;
   const db = {}, seen = [];
   let hits = [];
@@ -124,7 +89,7 @@ for (const [label, setup, hasSessions] of [["sdk v1", v1, true], ["server 2.4", 
   });
 
   beforeAll(async () => {
-    S = await setup(); ({ defineUi, html, WEB_META } = S.lib);
+    S = await v2(); ({ defineUi, html, WEB_META } = S.lib);
     ({ srv, sessions } = await S.serve(make, count)); MCP = `http://127.0.0.1:${srv.address().port}`;
     mkUi = (path) => defineUi({ name: "a", web: { origin: O, secret: SECRET, mcp: MCP + path }, view: async ({ user, call }) => html`<p>${user}: ${(await call("mine")).content[0].text}</p>` });
     ui = mkUi("/mcp");
@@ -283,7 +248,7 @@ for (const [label, setup, hasSessions] of [["sdk v1", v1, true], ["server 2.4", 
   });
 
   // a server that keeps sessions is not supported: its 400 is an error, and no session is opened
-  if (hasSessions) {
+  {
     let fr, ft;
     test("a web.mcp that keeps sessions: browser requests fail (500), and nothing runs", async () => {
       ui = mkUi("/mcp-s");
@@ -303,7 +268,8 @@ for (const [label, setup, hasSessions] of [["sdk v1", v1, true], ["server 2.4", 
 // Auth that makes no authInfo (an API-key header, an IP allowlist): a link from such a request has no token, so a hosted
 // origin must send the browser through the server's own endpoint, where that same check runs on every call.
 describe("no authInfo", () => {
-  let McpServer, StreamableHTTPServerTransport, defineUi, html, ui, srv, M, byIp;
+  const { defineUi, html } = lib;
+  let ui, srv, M, byIp;
   const view = () => html`<p>ok</p>`;
   let deletes = 0;
   const keys = new Set(["key-1"]), ips = new Set(["127.0.0.1", "::ffff:127.0.0.1"]);
@@ -321,18 +287,14 @@ describe("no authInfo", () => {
     return () => ui.site.fetch(new Request(`${O}/ui/tool/delete_all`, { method: "POST", headers: { cookie, "P-Req": "1" }, body: "{}" })).then((r) => r.status);
   };
   beforeAll(async () => {
-    ({ McpServer } = await import(join(SDK1, "server/mcp.js")));
-    ({ StreamableHTTPServerTransport } = await import(join(SDK1, "server/streamableHttp.js")));
-    const express = (await import(join(NM1, "express/index.js"))).default;
-    ({ defineUi, html } = await import(join(ROOT, "dist/index.js")));
-    const app = express();
-    const mount = (path, gate) => app.post(path, express.json(), (q, r, next) => gate(q) ? next() : r.status(401).end(), async (q, r) => {
-      const t = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); r.on("close", () => t.close());
-      await make().connect(t); await t.handleRequest(q, r, q.body);
+    const handler = createMcpHandler(make);
+    const gates = { "/key": (q) => keys.has(q.headers["x-api-key"]), "/ip": (q) => ips.has(q.socket.remoteAddress) };
+    srv = await listen(async (q, r) => {
+      const gate = gates[q.url.split("?")[0]];
+      if (!gate || !gate(q)) { q.resume(); return r.writeHead(gate ? 401 : 404).end(); }
+      await send(r, await handler.fetch(await toRequest(q)));
     });
-    mount("/key", (q) => keys.has(q.headers["x-api-key"]));
-    mount("/ip", (q) => ips.has(q.socket.remoteAddress));
-    srv = await listen(app); M = `http://127.0.0.1:${srv.address().port}`;
+    M = `http://127.0.0.1:${srv.address().port}`;
   });
   afterAll(() => { srv?.closeAllConnections(); srv?.close(); });
 

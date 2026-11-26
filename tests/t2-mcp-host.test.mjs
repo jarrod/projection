@@ -3,8 +3,7 @@ import { describe, test, expect, beforeAll, afterAll } from "vitest";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { AppBridge } from "@modelcontextprotocol/ext-apps/app-bridge";
 const NS = new URL("../examples/notes-server", import.meta.url).pathname;
-const { Client } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js`);
-const { InMemoryTransport } = await import(`${NS}/node_modules/@modelcontextprotocol/sdk/dist/esm/inMemory.js`);
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 const { createServer } = await import(`${NS}/dist/server.js`);
 // The DOM updates asynchronously: retry until it holds, for up to 3 s.
 const eventually = (fn) => expect.poll(fn, { timeout: 3000, interval: 15 });
