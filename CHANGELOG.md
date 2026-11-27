@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-26)
+- Released as a Git tag with `dist/` built in: `pnpm add github:jarrod/projector#latest` installs the newest release, which the `latest` tag follows. Installing no longer builds the package.
+- Licensed MIT.
 - The view reads through the server's tools. It gets `call(tool, args)`, which runs a tool through the server's own `tools/call` handler as the person viewing, and returns its result. Only read tools: annotated `readOnlyHint`, or listed in the new `reads` option for tools that only read but aren't annotated. Other tools are refused before they run, and a view's reads never refresh views. Reading a store directly from the view is no longer the documented way, and the example no longer does it.
 - Open pages check for changes every 5 seconds (`poll`, in seconds), straight after their own action, and not while hidden. Each check is answered at once: the server runs the view and sends HTML only if it changed. This replaces held requests and the change counter, so changes from anywhere, on any instance, show up within one check.
 - Removed `ui.write()`: nothing needs to signal changes.

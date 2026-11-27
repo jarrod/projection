@@ -2,7 +2,7 @@
 
 Add a live UI to an existing MCP server. You write one file and change one line. Your tools stay as they are: the UI reads and writes only through them. To have an agent do it, [install the skill](#have-an-agent-do-it).
 
-![The notes example](screenshots/shot-light.png)
+![The notes example](https://raw.githubusercontent.com/jarrod/projector/main/docs/screenshots/shot-light.png)
 
 ## Does it fit?
 
@@ -12,9 +12,13 @@ The UI can only show what your tools return, so you need at least one tool that 
 
 ## 1. Install
 
+Install the latest release. Each release is a `v*` tag with `dist/` built in, so nothing builds on install, and the `latest` tag points at the newest one:
+
 ```bash
-npm install github:jarrod/projector
+pnpm add github:jarrod/projector#latest
 ```
+
+With npm: `npm install github:jarrod/projector#latest`. Your lockfile records the exact release, and `pnpm update mcp-projector` moves to the latest. To stay on one release, use its tag instead of `latest`, for example `#v0.4.0`, or a range such as `#semver:^0.4.0`.
 
 ## 2. Write `src/ui.ts`
 
@@ -41,7 +45,7 @@ export const ui = defineUi({
 
 The view gets its data by calling `list_notes`, and the button calls `pin_note`: the same tools the agent calls, through the same handler, as the person viewing.
 
-This assumes `list_notes` returns `structuredContent` and is annotated `readOnlyHint: true`. If it returns only text, read the text: the [example](../examples/notes-server/src/ui.ts) does. If it isn't annotated, list it in `reads: ["list_notes"]` rather than editing the tool. A view can only call read tools, so rendering never changes data.
+This assumes `list_notes` returns `structuredContent` and is annotated `readOnlyHint: true`. If it returns only text, read the text: the [example](https://github.com/jarrod/projector/blob/main/examples/notes-server/src/ui.ts) does. If it isn't annotated, list it in `reads: ["list_notes"]` rather than editing the tool. A view can only call read tools, so rendering never changes data.
 
 ## 3. Attach it
 
@@ -83,7 +87,14 @@ view.close(); await t.close();
 
 ## Have an agent do it
 
-The [`mcp-projector` skill](../skills/mcp-projector/SKILL.md) walks an agent through all of the steps above.
+The [`mcp-projector` skill](../skills/mcp-projector/SKILL.md) walks an agent through all of the steps above. It ships in the package, so any agent can use it without installing anything else. Paste this into your agent:
+
+```text
+Install mcp-projector: pnpm add github:jarrod/projector#latest
+Then follow node_modules/mcp-projector/skills/mcp-projector/SKILL.md to attach it to this MCP server and build a view.
+```
+
+Or install the skill first, so your agent finds it whenever you ask for a UI:
 
 **Claude Code:** install it as a plugin, then ask Claude to add Projector to your server.
 
@@ -98,7 +109,7 @@ The [`mcp-projector` skill](../skills/mcp-projector/SKILL.md) walks an agent thr
 codex plugin marketplace add jarrod/projector
 ```
 
-**Any agent, after `npm install`:** copy the skill into the folder your agent reads skills from. Claude Code reads `.claude/skills/`, and Codex reads `.agents/skills/`.
+**Any agent, after installing:** copy the skill into the folder your agent reads skills from. Claude Code reads `.claude/skills/`, and Codex reads `.agents/skills/`.
 
 ```bash
 mkdir -p .claude/skills && cp -r node_modules/mcp-projector/skills/mcp-projector .claude/skills/
@@ -110,7 +121,7 @@ mkdir -p .agents/skills && cp -r node_modules/mcp-projector/skills/mcp-projector
 
 ## Next
 
-- A fuller example: [`examples/notes-server`](../examples/notes-server/src/ui.ts) has search, tabs, a dialog form, a row action and web mode.
+- A fuller example: [`examples/notes-server`](https://github.com/jarrod/projector/blob/main/examples/notes-server/src/ui.ts) has search, tabs, a dialog form, a row action and web mode.
 - [Building a UI](building-a-ui.md) covers params, actions, styling and the mistakes people make.
 - [How it works](how-it-works.md) explains what happens on each update.
-- Every component and option is typed and documented in the package's types: start at [`components.ts`](../src/ui/components.ts).
+- Every component and option is typed and documented in the package's types: start at [`components.ts`](https://github.com/jarrod/projector/blob/main/src/ui/components.ts), shipped as `dist/ui/components.d.ts` in the package.

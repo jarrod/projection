@@ -37,7 +37,7 @@ Test with `testUi` from `mcp-projector/testing`: it drives the server as an agen
 
 | Need | File |
 |---|---|
-| Components, props and options | The types in `src/ui/components.ts`, `src/ui.ts` and `src/web.ts` |
+| Components, props and options | The types in `dist/ui/components.d.ts`, `dist/ui.d.ts` and `dist/web.d.ts` (in this repo: `src/ui/components.ts`, `src/ui.ts`, `src/web.ts`) |
 | Patterns: queues, filters, paging, detail views | `skills/mcp-projector/references/recipes.md` |
 | From a symptom to its fix | `skills/mcp-projector/references/troubleshooting.md` |
 | Links, sessions, hosting | `docs/web-mode.md` |

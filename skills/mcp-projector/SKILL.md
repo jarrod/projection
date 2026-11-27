@@ -25,13 +25,17 @@ For example: "Open on `list_notes`, watch only" or "Open on `list_notes`, with `
 
 ## 3. Install Projector
 
-Use the target project's package manager and keep its existing Projector dependency if present. For npm:
+Keep the target project's existing Projector dependency if present. Otherwise install the latest release with the project's package manager (each release is a `v*` tag with `dist/` built in, and `latest` points at the newest). For pnpm:
 
 ```bash
-npm install github:jarrod/projector
+pnpm add github:jarrod/projector#latest
 ```
 
-If the Git install leaves the package without built exports, check out the same source revision in a temporary directory and run `pnpm install` and `pnpm pack` there. Install the tarball printed by `pnpm pack` from the target project.
+For npm: `npm install github:jarrod/projector#latest`. Don't write a version number: the `latest` tag always points at the newest release, and the lockfile records the exact commit.
+
+Install a `v*` tag, never a branch: branches hold no `dist/`, so their imports fail.
+
+This skill can be newer than the installed release. Where they differ, the installed package wins: its docs are in `node_modules/mcp-projector/` (`AGENTS.md`, `docs/`) and its API is the types in `node_modules/mcp-projector/dist/`.
 
 ## 4. Add and attach the view
 
