@@ -1,10 +1,9 @@
 {
   "name": "mcp-projector",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Bolt a live, styled human UI onto any MCP server. No framework.",
   "scripts": {
     "build": "node scripts/build.ts",
-    "prepare": "node scripts/build.ts",
     "typecheck": "tsc -p tests && tsc -p examples/notes-server --noEmit",
     "test": "pnpm build && pnpm typecheck && vitest run --project unit",
     "test:web": "pnpm build && pnpm -F notes-server-example build && vitest run --project web",
@@ -20,8 +19,8 @@
     "server-rendered",
     "live"
   ],
-  "author": "",
-  "license": "UNLICENSED",
+  "author": "jarrod",
+  "license": "MIT",
   "type": "module",
   "files": [
     "dist",
@@ -30,7 +29,8 @@
     "CHANGELOG.md",
     "README.md",
     "skills",
-    "docs/*.md"
+    "docs/*.md",
+    "docs/banner-*.svg"
   ],
   "peerDependencies": {
     "@modelcontextprotocol/client": "^2.4.0",
@@ -75,5 +75,7 @@
     "type": "git",
     "url": "https://github.com/jarrod/projector.git"
   },
+  "homepage": "https://github.com/jarrod/projector#readme",
+  "bugs": "https://github.com/jarrod/projector/issues",
   "packageManager": "pnpm@10.15.1"
 }

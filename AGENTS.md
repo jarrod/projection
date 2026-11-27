@@ -26,7 +26,7 @@ const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 - Form values arrive as strings. Put ids and numbers in `args`.
 - `params` comes from the viewer and can hold any JSON, so read it defensively: `String(params.q ?? "")`.
 - Authenticated requests need `authInfo.extra.sub`, or an `identify` function. The browser carries the agent's own token and every UI request goes through the server's auth, so tools scope data as they already do. Projector adds no auth or state of its own.
-- A hosted server needs `web: { origin, secret }` and must route requests to `ui.site.node` or `ui.site.fetch`. Without an origin, links only work on the same machine.
+- A hosted server needs `web: { origin, secret, mcp }` and must route requests to `ui.site.node` or `ui.site.fetch`. `secret` is 32+ random characters from an environment variable (`openssl rand -base64 32`), never committed. Without an origin, links only work on the same machine.
 - A hosted server sets `web.mcp`: its own stateless MCP endpoint, as a URL or an in-process handler. Every browser request goes there with the agent's token. On several instances or serverless, also a `web.claim` backed by real storage. See `docs/web-mode.md`.
 
 ## Check
@@ -37,7 +37,7 @@ Test with `testUi` from `mcp-projector/testing`: it drives the server as an agen
 
 | Need | File |
 |---|---|
-| Components, props and options | The types in `src/ui/components.ts`, `src/ui.ts` and `src/web.ts` |
+| Components, props and options | The types in `dist/ui/components.d.ts`, `dist/ui.d.ts` and `dist/web.d.ts` (in this repo: `src/ui/components.ts`, `src/ui.ts`, `src/web.ts`) |
 | Patterns: queues, filters, paging, detail views | `skills/mcp-projector/references/recipes.md` |
 | From a symptom to its fix | `skills/mcp-projector/references/troubleshooting.md` |
 | Links, sessions, hosting | `docs/web-mode.md` |

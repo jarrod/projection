@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="240" viewBox="0 0 1280 240" role="img" aria-label="projector: your agent does the work, projector puts it on screen">
+<defs><pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#e5e5e5"/></pattern></defs>
+<rect x="0.5" y="0.5" width="1279" height="239" rx="16" fill="#ffffff" stroke="#eaeaea"/>
+<rect x="0.5" y="0.5" width="1279" height="239" rx="16" fill="url(#dots)"/>
+<text x="96" y="126" font-family="'Google Sans Code', 'Geist Mono', 'SF Mono', ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="60" font-weight="600" letter-spacing="-1.5" fill="#111111">projector</text>
+<text x="98" y="170" font-family="'Google Sans Code', 'Geist Mono', 'SF Mono', ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="20" fill="#666666">Your agent does the work. Projector puts it on screen.</text>
+<line x1="1015.1" y1="92.2" x2="1169.7" y2="137.2" stroke="#666666" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>
+<line x1="1015.1" y1="92.2" x2="1066.7" y2="196.7" stroke="#666666" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>
+<line x1="1015.1" y1="92.2" x2="1066.7" y2="120.2" stroke="#666666" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>
+<line x1="1015.1" y1="92.2" x2="1169.7" y2="60.7" stroke="#666666" stroke-width="1" stroke-dasharray="3 4" opacity="0.55"/>
+<polygon points="1169.7,137.2 1066.7,196.7 1066.7,120.2 1169.7,60.7" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="1074.0" y1="127.9" x2="1099.0" y2="113.4" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="1"/>
+<line x1="1074.0" y1="138.1" x2="1162.3" y2="87.1" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="0.35"/>
+<line x1="1081.4" y1="145.7" x2="1125.5" y2="120.2" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="1"/>
+<line x1="1074.0" y1="150.0" x2="1075.5" y2="149.1" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="1"/>
+<line x1="1081.4" y1="157.6" x2="1113.8" y2="138.9" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="1"/>
+<line x1="1074.0" y1="161.9" x2="1075.5" y2="161.0" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="1"/>
+<line x1="1081.4" y1="169.5" x2="1119.7" y2="147.4" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="1"/>
+<line x1="1074.0" y1="173.8" x2="1075.5" y2="172.9" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" opacity="1"/>
+<polygon points="1147.6,81.1 1162.3,72.6 1162.3,81.1 1147.6,89.6" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="982.0,41.6 1033.5,71.3 1033.5,91.8 996.7,113.0 945.2,83.2 945.2,62.9" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1033.5,71.3 996.7,92.6 945.2,62.9" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="996.7" y1="92.6" x2="996.7" y2="113.0" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="982.0" y1="50.1" x2="959.9" y2="62.9" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="987.2" y1="53.1" x2="965.1" y2="65.8" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="992.3" y1="56.0" x2="970.2" y2="68.8" fill="none" stroke="#111111" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+<g transform="matrix(-0.7361,0.4250,0,-0.85,1015.1,92.2)"><circle r="8" fill="none" stroke="#111111" stroke-width="1.5" vector-effect="non-scaling-stroke"/></g>
+</svg>

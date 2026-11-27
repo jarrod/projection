@@ -2,7 +2,7 @@
 
 Web mode serves the same UI on a normal URL. It's on by default, because in apps that can't draw UIs (Claude Code, for one) it's the only way a person sees it. There is no sign-in and no account: a person only sees the UI because the agent opened it, and the browser carries the agent's own MCP auth. Projector adds no auth of its own; the MCP server checks every request.
 
-![The link's Continue page](screenshots/shot-gate.png)
+![The link's Continue page](https://raw.githubusercontent.com/jarrod/projector/main/docs/screenshots/shot-gate.png)
 
 ## What the agent sees
 
@@ -68,7 +68,7 @@ web: {
 - **`origin`** is a bare https origin (`https://app.example.com`, no path or trailing slash). Serve the UI from its own origin or subdomain where you can: the cookie covers the whole origin, so a script injected into any other page there could act with the agent's token.
 - Links and cookies hold the agent's token, encrypted with `secret`. Keep the secret as safe as the tokens themselves: anyone with both a logged link and the secret could read the token.
 
-For Cloudflare Workers, see [`examples/cloudflare-worker`](../examples/cloudflare-worker).
+For Cloudflare Workers, see [`examples/cloudflare-worker`](https://github.com/jarrod/projector/tree/main/examples/cloudflare-worker).
 
 ### Workers: pass `authInfo` to the handler
 

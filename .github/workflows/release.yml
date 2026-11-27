@@ -1,0 +1,55 @@
+name: release
+# Run by hand (Actions → release → Run workflow) after the version bump is merged to main.
+# Tags v<version from package.json> on a commit that adds the built dist/ on top of main, so apps install a prebuilt
+# package straight from Git: `pnpm add github:jarrod/projector#latest` installs the latest. main itself never holds dist/.
+on: workflow_dispatch
+permissions:
+  contents: write
+concurrency: release
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter mcp-projector --filter notes-server-example
+      - id: v
+        run: |
+          v="v$(node -p 'require("./package.json").version')"
+          if git ls-remote --exit-code --tags origin "refs/tags/$v" >/dev/null; then echo "$v is already tagged: bump the version first" >&2; exit 1; fi
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
+      # Builds dist/ and runs the unit tests against it.
+      - run: pnpm test
+      - name: Commit dist/ and tag it
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f dist
+          git commit -q -m "Release ${{ steps.v.outputs.tag }} (built dist/)"
+          git tag "${{ steps.v.outputs.tag }}"
+          git push origin "refs/tags/${{ steps.v.outputs.tag }}"
+          # `latest` follows the newest release: the docs install `#latest`. It is the one tag that moves, and only
+          # forward: a patch to an older line leaves it where it is.
+          newest="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##' | sort -V | tail -1)"
+          if [ "$newest" = "${{ steps.v.outputs.tag }}" ]; then
+            git tag -f latest
+            git push -f origin refs/tags/latest
+          else
+            echo "Not moving latest: $newest is newer"
+          fi
+      # A GitHub Release with this version's changelog entry, so the release shows up for people and update bots.
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          awk -v h="## ${TAG#v} " 'index($0, h) == 1 { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          printf '\nInstall this release: `pnpm add github:jarrod/projector#%s` (or `#latest` for the newest release)\n' "$TAG" >> "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"

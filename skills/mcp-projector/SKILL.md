@@ -25,13 +25,17 @@ For example: "Open on `list_notes`, watch only" or "Open on `list_notes`, with `
 
 ## 3. Install Projector
 
-Use the target project's package manager and keep its existing Projector dependency if present. For npm:
+Keep the target project's existing Projector dependency if present. Otherwise install the latest release with the project's package manager (each release is a `v*` tag with `dist/` built in, and `latest` points at the newest). For pnpm:
 
 ```bash
-npm install github:jarrod/projector
+pnpm add github:jarrod/projector#latest
 ```
 
-If the Git install leaves the package without built exports, check out the same source revision in a temporary directory and run `pnpm install` and `pnpm pack` there. Install the tarball printed by `pnpm pack` from the target project.
+For npm: `npm install github:jarrod/projector#latest`. Don't write a version number: the `latest` tag always points at the newest release, and the lockfile records the exact commit.
+
+Install a `v*` tag, never a branch: branches hold no `dist/`, so their imports fail.
+
+This skill can be newer than the installed release. Where they differ, the installed package wins: its docs are in `node_modules/mcp-projector/` (`AGENTS.md`, `docs/`) and its API is the types in `node_modules/mcp-projector/dist/`.
 
 ## 4. Add and attach the view
 
@@ -82,8 +86,29 @@ const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 
 Open pages check for changes every 5 seconds and after their own actions, so changes from anywhere show up without any code in the server.
 
-## 5. Check the setup
+## 5. Set up hosting
+
+A server reached over the network (an HTTP MCP endpoint, a container, Workers) needs four settings, or its links don't open. Skip this step only for a stdio server that a local agent runs on the same machine.
+
+1. **`origin`**: the public https origin people open, such as `https://notes.example.com`. Ask the caller if the project doesn't show it.
+2. **`secret`**: 32 or more random characters, the same on every instance. It encrypts links and cookies, which hold the agent's token. Read it from an environment variable such as `UI_SECRET`; never commit it. Tell the caller to make one with `openssl rand -base64 32` and set it where the server's other secrets live (for Workers: `wrangler secret put UI_SECRET`).
+3. **`mcp`**: the server's own stateless MCP endpoint, as a URL or an in-process handler. Every browser request goes there with the agent's token, through the server's auth.
+4. **Routing**: send HTTP requests to `ui.site.node` (Node, Express) or `ui.site.fetch` (fetch runtimes, Workers).
+
+```ts
+export const ui = defineUi({ name: "notes", view, web: {
+  origin: process.env.UI_ORIGIN,
+  secret: process.env.UI_SECRET,
+  mcp: "http://127.0.0.1:3000/mcp",
+} });
+
+http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);
+```
+
+On several instances or serverless, also set `claim`, backed by shared storage, so each link works once. Details: `docs/web-mode.md`. Don't add sign-in, sessions or state for the UI: the browser carries the agent's own auth.
+
+## 6. Check the setup
 
 Run the project's usual build or type check. If a test MCP Apps host is available, call the opening tool and check the expected data and controls. For errors or a UI that doesn't update, see [troubleshooting](references/troubleshooting.md).
 
-Tell the caller which actions are available, and that they can ask the agent to show the UI in their browser (`open_<name>_in_browser`). A server reached over the network needs `web: { origin, secret, mcp }` (`mcp` is its own MCP endpoint, so browser requests go through its auth) and its HTTP routed to `ui.site.node` or `ui.site.fetch`; on several instances or serverless also a `claim` backed by real storage (see `docs/web-mode.md` in the Projector repository). Don't add sign-in, sessions or state for the UI: the browser carries the agent's own auth. A local one needs nothing.
+Tell the caller which actions are available, and that they can ask the agent to show the UI in their browser (`open_<name>_in_browser`). For a hosted server, remind them to set `UI_ORIGIN` and `UI_SECRET` before they deploy.
