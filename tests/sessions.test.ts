@@ -357,6 +357,19 @@ describe("browser sessions run tools as the token's user, through the server's e
   });
 });
 
+describe("in-process web.mcp", () => {
+  test("the request a function web.mcp receives has Host set to the origin's host", async () => {
+    const heard: (string | null)[] = [], N: any = {}, WO = "https://app.workers.dev";
+    N.ui = defineUi({ name: "h", web: { origin: WO, secret: SECRET, mcp: async (req) => {
+      heard.push(req.headers.get("host"));
+      return createMcpHandler(() => N.ui.attach(new McpServer({ name: "h", version: "1" }))).fetch(req);
+    } }, view: ({ user }) => html`<p>${user}</p>` });
+    const nc = (await N.ui.site.fetch(new Request(await N.ui.link({}), { method: "POST" }))).headers.get("set-cookie").split(";")[0];
+    expect((await N.ui.site.fetch(new Request(`${WO}/ui/`, { headers: { cookie: nc } }))).status).toBe(200);
+    expect(heard).toEqual(["app.workers.dev"]);
+  });
+});
+
 describe("from the security review", () => {
   // The view of a browser session can't call a tool that changes data.
   test("a browser session's view cannot call a tool that changes data", async () => {

@@ -69,3 +69,17 @@ web: {
 - Links and cookies hold the agent's token, encrypted with `secret`. Keep the secret as safe as the tokens themselves: anyone with both a logged link and the secret could read the token.
 
 For Cloudflare Workers, see [`examples/cloudflare-worker`](../examples/cloudflare-worker).
+
+### Workers: pass `authInfo` to the handler
+
+Projector gets the agent's token and the viewer from `authInfo` in the tool handler. On Workers with the `agents` package's `createMcpHandler` behind `workers-oauth-provider`, the handler fills `authInfo` from the OAuth context only when that context has a `clientId`. Delegated and service tokens often have none, so `authInfo` is undefined: the open tool has no token to put in the link, and `identify` finds no viewer. Pass it yourself:
+
+```ts
+createMcpHandler(build).fetch(request, {
+  authInfo: { token, clientId, scopes: [], expiresAt, extra: { sub: userId } },
+});
+```
+
+`token` is the agent's bearer token. `expiresAt` (seconds) ends the browser's cookie with the token. The default `identify` reads `extra.sub`; if you set `identify`, return the viewer from whatever you put in `extra`.
+
+Projector sets `Host` on the request it passes to a function `web.mcp` (the origin's host), so handlers that check it for DNS rebinding accept it.
