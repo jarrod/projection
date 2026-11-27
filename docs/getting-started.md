@@ -57,11 +57,33 @@ const server = ui.attach(new McpServer({ name: "notes", version: "1.0.0" }));
 
 That's the whole integration. Your tools, schemas and results don't change, and nothing else in the server needs editing; projector adds one tool, `open_notes_in_browser`.
 
-## 4. See it
+## 4. Host it
+
+Give the UI its public address, a secret and your MCP endpoint, and route requests to it:
+
+```ts
+export const ui = defineUi({ name: "notes", view, web: {
+  origin: process.env.UI_ORIGIN,     // e.g. "https://notes.example.com"
+  secret: process.env.UI_SECRET,     // 32+ random characters, the same on every instance
+  mcp: "http://127.0.0.1:3000/mcp",  // your own stateless MCP endpoint
+} });
+
+http.createServer((req, res) => ui.site!.node(req, res)).listen(3000);   // or ui.site!.fetch(request)
+```
+
+Make the secret once and keep it with your other secrets, never in the repo:
+
+```bash
+openssl rand -base64 32
+```
+
+It encrypts the links and cookies that carry the agent's token, so changing it ends every open link and session. With several instances or on serverless, also set `claim`. [Web mode](web-mode.md#hosted-servers-give-the-origin-and-a-secret) has the details, and [deploying](web-mode.md#deploying) covers Workers.
+
+Skip this step for a stdio server a local agent runs on your machine: projector serves the UI on 127.0.0.1 by itself.
+
+## 5. See it
 
 Ask your agent to show you the notes UI. It calls `open_notes_in_browser`, and you get a single-use link that opens the UI in your browser.
-
-A server people reach over the network needs two more settings: see [Web mode](web-mode.md#hosted-servers-give-the-origin-and-a-secret).
 
 To look at it without an agent, render a static page:
 
@@ -69,7 +91,7 @@ To look at it without an agent, render a static page:
 npx mcp-projector preview dist/ui.js > preview.html
 ```
 
-## 5. Test it
+## 6. Test it
 
 `testUi` runs your server as an agent and as a host, with no browser. It needs a `createServer()` factory that builds and returns the server.
 
