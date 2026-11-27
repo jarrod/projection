@@ -40,8 +40,9 @@ Do these steps when the user asks for a UI, dashboard or live view of an MCP ser
 1. Check the requirements above.
 2. Install the latest release with the project's package manager: `pnpm add github:jarrod/projector#latest` or `npm install github:jarrod/projector#latest`. Do not write a version number.
 3. Read `node_modules/mcp-projector/skills/mcp-projector/SKILL.md` and follow it. It tells you what to ask the user.
-4. Obey the rules below and in `node_modules/mcp-projector/AGENTS.md`. These files match the installed version. They win over this page.
-5. Tell the user to restart the server. Then the user asks the server's agent to show the UI. That agent calls `open_<name>_in_browser` and sends a link.
+4. Set up [web mode](docs/web-mode.md). Web mode needs a secret. Make one with `openssl rand -base64 32`. See [Hosting](#hosting).
+5. Obey the rules below and in `node_modules/mcp-projector/AGENTS.md`. These files match the installed version. They win over this page.
+6. Tell the user to restart or deploy the server. Then the user asks the server's agent to show the UI. That agent calls `open_<name>_in_browser` and sends a link.
 
 ## What you will write
 
@@ -81,6 +82,24 @@ const server = ui.attach(new McpServer({ name: "todos", version: "1.0.0" }));
 
 `list_todos` must have `annotations: { readOnlyHint: true }`. If it does not, add `reads: ["list_todos"]` to `defineUi`. Do not change the tool.
 
+## Hosting
+
+Add these settings to `defineUi`. Without them, links do not open.
+
+```ts
+web: {
+  origin: process.env.UI_ORIGIN,     // the public https origin, for example "https://todos.example.com"
+  secret: process.env.UI_SECRET,     // 32 or more random characters, the same on every instance
+  mcp: "http://127.0.0.1:3000/mcp",  // the server's own stateless MCP endpoint
+}
+```
+
+- Make the secret with `openssl rand -base64 32`. Keep it in an environment variable. Do not commit it.
+- Send HTTP requests to `ui.site.node` (Node) or `ui.site.fetch` (Workers and other fetch runtimes).
+- With more than one instance, or on serverless, also set `claim` with shared storage.
+- A stdio server that runs on the user's machine does not need these settings.
+- Read [Web mode](docs/web-mode.md) for the details.
+
 ## Rules
 
 - Call `ui.attach()` before you register a tool. If you do not, it throws an error.
@@ -89,7 +108,7 @@ const server = ui.attach(new McpServer({ name: "todos", version: "1.0.0" }));
 - `call` runs only read tools.
 - Give each `Table` an `id` and a `rowKey`. If you do not, rows lose focus when the data changes.
 - Install a release: `#latest` or `#v<version>`. Do not install a branch. Branches have no `dist/`.
-- For a hosted server, read [Web mode](docs/web-mode.md). Without `web.origin`, links work only on the same machine.
+- A hosted server needs `web.origin`, `web.secret` and `web.mcp`. Without `web.origin`, links work only on the same machine.
 
 ## Where to look
 
