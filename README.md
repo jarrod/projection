@@ -3,79 +3,83 @@
   <img alt="projector: your agent does the work, projector puts it on screen" src="docs/banner-light.svg">
 </picture>
 
-`mcp-projector` adds a live web UI to an MCP server. The UI shows data from the server's tools. Each button in the UI calls one of the server's tools. People and the agent see the same data.
+This page is for AI agents. `mcp-projector` adds a live web UI to an MCP server. The UI shows data from the server's tools. Each button in the UI calls one of the server's tools. The user and the server's agent see the same data.
 
-## What you get
+> **Are you a person?** Give your coding agent this prompt:
+>
+> ```text
+> Install mcp-projector: pnpm add github:jarrod/projector#latest
+> Then follow node_modules/mcp-projector/skills/mcp-projector/SKILL.md to attach it to this MCP server and build a view.
+> ```
+>
+> Claude Code and Codex can also [install the skill as a plugin](docs/getting-started.md#have-an-agent-do-it).
 
-- The agent gets one new tool: `open_<name>_in_browser`. This tool sends a single-use link to the person.
+## What the user gets
+
+- The server's agent gets one new tool: `open_<name>_in_browser`. This tool sends a single-use link to the user.
 - All other tools, schemas and results stay the same.
 - The UI reads data only through read tools. It changes data only through tool calls.
 - Each browser request uses the agent's auth. Projector adds no sign-in and no state.
 - Open pages check for changes every 5 seconds.
-- Themes: light and dark, `terminal`, `pop`, or your own CSS.
+- Themes: light and dark, `terminal`, `pop`, or custom CSS.
 - About 2.5 KB of browser JavaScript. You write no client code.
 
 ## Requirements
+
+Check these before you install. If the server does not meet them, stop and tell the user.
 
 - Node.js 22.18 or later.
 - A server that uses `McpServer` from `@modelcontextprotocol/server` 2.4 or later. The v1 SDK (`@modelcontextprotocol/sdk`) does not work. A low-level `Server` does not work.
 - zod 4.2 or later.
 - One or more tools that return the data to show.
 
-## Quick start with an agent
+## Your steps
 
-Give this prompt to your coding agent:
+Do these steps when the user asks for a UI, dashboard or live view of an MCP server:
 
-```text
-Install mcp-projector: pnpm add github:jarrod/projector#latest
-Then follow node_modules/mcp-projector/skills/mcp-projector/SKILL.md to attach it to this MCP server and build a view.
+1. Check the requirements above.
+2. Install the latest release with the project's package manager: `pnpm add github:jarrod/projector#latest` or `npm install github:jarrod/projector#latest`. Do not write a version number.
+3. Read `node_modules/mcp-projector/skills/mcp-projector/SKILL.md` and follow it. It tells you what to ask the user.
+4. Obey the rules below and in `node_modules/mcp-projector/AGENTS.md`. These files match the installed version. They win over this page.
+5. Tell the user to restart the server. Then the user asks the server's agent to show the UI. That agent calls `open_<name>_in_browser` and sends a link.
+
+## What you will write
+
+You write one new file and change one line. This example is for a server with the tools `list_todos` and `complete_todo`.
+
+`src/ui.ts`:
+
+```ts
+import { defineUi, html, Header, Table, Button } from "mcp-projector";
+
+export const ui = defineUi({
+  name: "todos",
+  view: async ({ call }) => {
+    const { structuredContent } = await call("list_todos");
+    const todos: { id: number; title: string }[] = structuredContent.todos;
+    return html`
+      ${Header({ title: "Todos" })}
+      ${Table({
+        id: "todos", rows: todos, rowKey: (t) => t.id,
+        columns: [
+          { label: "Todo", key: "title" },
+          { label: "", cell: (t) => Button({ tool: "complete_todo", args: { id: t.id } }, "Done") },
+        ],
+      })}`;
+  },
+});
 ```
 
-Agents: after you install, read `node_modules/mcp-projector/AGENTS.md`. It matches the installed version.
+In the file that makes the server, wrap the `McpServer`. Do this before you register a tool:
 
-## Quick start by hand
+```ts
+import { McpServer } from "@modelcontextprotocol/server";
+import { ui } from "./ui.js";
 
-1. Install the package:
+const server = ui.attach(new McpServer({ name: "todos", version: "1.0.0" }));
+```
 
-   ```bash
-   pnpm add github:jarrod/projector#latest
-   ```
-
-2. Make `src/ui.ts`. The view reads data with `call`. Each button calls a tool:
-
-   ```ts
-   import { defineUi, html, Header, Table, Button } from "mcp-projector";
-
-   export const ui = defineUi({
-     name: "todos",
-     view: async ({ call }) => {
-       const { structuredContent } = await call("list_todos");
-       const todos: { id: number; title: string }[] = structuredContent.todos;
-       return html`
-         ${Header({ title: "Todos" })}
-         ${Table({
-           id: "todos", rows: todos, rowKey: (t) => t.id,
-           columns: [
-             { label: "Todo", key: "title" },
-             { label: "", cell: (t) => Button({ tool: "complete_todo", args: { id: t.id } }, "Done") },
-           ],
-         })}`;
-     },
-   });
-   ```
-
-3. Attach the UI where you make the server. Do this before you register a tool:
-
-   ```ts
-   import { McpServer } from "@modelcontextprotocol/server";
-   import { ui } from "./ui.js";
-
-   const server = ui.attach(new McpServer({ name: "todos", version: "1.0.0" }));
-   ```
-
-4. Make sure that `list_todos` has `annotations: { readOnlyHint: true }`. If it does not, add `reads: ["list_todos"]` to `defineUi`. Do not change the tool.
-
-5. Restart the server. Tell the agent: "Show me my todos." The agent sends a link. Open the link.
+`list_todos` must have `annotations: { readOnlyHint: true }`. If it does not, add `reads: ["list_todos"]` to `defineUi`. Do not change the tool.
 
 ## Rules
 
@@ -102,6 +106,4 @@ All paths are in `node_modules/mcp-projector/`. Each file matches the installed 
 | Links, auth and hosting | [`docs/web-mode.md`](docs/web-mode.md) |
 | Changes between versions | [`CHANGELOG.md`](CHANGELOG.md) |
 
-Claude Code and Codex can also [install the skill as a plugin](docs/getting-started.md#have-an-agent-do-it).
-
-To work on projector: `corepack enable && pnpm install && pnpm test`. License: [MIT](LICENSE).
+To change projector itself: `corepack enable && pnpm install && pnpm test`. License: [MIT](LICENSE).
