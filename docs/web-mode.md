@@ -2,7 +2,7 @@
 
 Web mode serves the same UI on a normal URL. It's on by default, because in apps that can't draw UIs (Claude Code, for one) it's the only way a person sees it. There is no sign-in and no account: a person only sees the UI because the agent opened it, and the browser carries the agent's own MCP auth. Projector adds no auth of its own; the MCP server checks every request.
 
-![The link's Continue page](screenshots/shot-gate.png)
+![The link's Continue page](https://raw.githubusercontent.com/jarrod/projector/main/docs/screenshots/shot-gate.png)
 
 ## What the agent sees
 

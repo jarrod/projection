@@ -19,8 +19,8 @@
     "server-rendered",
     "live"
   ],
-  "author": "",
-  "license": "UNLICENSED",
+  "author": "jarrod",
+  "license": "MIT",
   "type": "module",
   "files": [
     "dist",
@@ -29,7 +29,8 @@
     "CHANGELOG.md",
     "README.md",
     "skills",
-    "docs/*.md"
+    "docs/*.md",
+    "docs/banner-*.svg"
   ],
   "peerDependencies": {
     "@modelcontextprotocol/client": "^2.4.0",
@@ -74,5 +75,7 @@
     "type": "git",
     "url": "https://github.com/jarrod/projector.git"
   },
+  "homepage": "https://github.com/jarrod/projector#readme",
+  "bugs": "https://github.com/jarrod/projector/issues",
   "packageManager": "pnpm@10.15.1"
 }

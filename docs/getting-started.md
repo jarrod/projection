@@ -2,7 +2,7 @@
 
 Add a live UI to an existing MCP server. You write one file and change one line. Your tools stay as they are: the UI reads and writes only through them. To have an agent do it, [install the skill](#have-an-agent-do-it).
 
-![The notes example](screenshots/shot-light.png)
+![The notes example](https://raw.githubusercontent.com/jarrod/projector/main/docs/screenshots/shot-light.png)
 
 ## Does it fit?
 
@@ -12,13 +12,13 @@ The UI can only show what your tools return, so you need at least one tool that 
 
 ## 1. Install
 
-Install a release tag. Each tag has `dist/` built in, so nothing builds on install:
+Install the latest release. Each release is a `v*` tag with `dist/` built in, so nothing builds on install, and the `latest` tag points at the newest one:
 
 ```bash
-pnpm add github:jarrod/projector#v0.4.0
+pnpm add github:jarrod/projector#latest
 ```
 
-To upgrade, change the tag. The releases are the repository's `v*` tags.
+With npm: `npm install github:jarrod/projector#latest`. Your lockfile records the exact release, and `pnpm update mcp-projector` moves to the latest. To stay on one release, use its tag instead of `latest`, for example `#v0.4.0`, or a range such as `#semver:^0.4.0`.
 
 ## 2. Write `src/ui.ts`
 
@@ -87,7 +87,14 @@ view.close(); await t.close();
 
 ## Have an agent do it
 
-The [`mcp-projector` skill](../skills/mcp-projector/SKILL.md) walks an agent through all of the steps above.
+The [`mcp-projector` skill](../skills/mcp-projector/SKILL.md) walks an agent through all of the steps above. It ships in the package, so any agent can use it without installing anything else. Paste this into your agent:
+
+```text
+Install mcp-projector: pnpm add github:jarrod/projector#latest
+Then follow node_modules/mcp-projector/skills/mcp-projector/SKILL.md to attach it to this MCP server and build a view.
+```
+
+Or install the skill first, so your agent finds it whenever you ask for a UI:
 
 **Claude Code:** install it as a plugin, then ask Claude to add Projector to your server.
 
