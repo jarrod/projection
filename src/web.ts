@@ -117,6 +117,8 @@ export function createWeb(d: Deps, opts: WebOptions) {
     if (!mcp) return d.local(tool, args);
     const h: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
     if (t) h.Authorization = "Bearer " + t;
+    // A real POST to <origin>/mcp carries Host; some handlers (DNS-rebinding checks) refuse a request without it.
+    if (typeof mcp === "function") h.Host = new URL(origin).host;
     const signal = AbortSignal.any ? AbortSignal.any([s, AbortSignal.timeout(TIMEOUT)]) : AbortSignal.timeout(TIMEOUT);
     // A redirect is not followed (and, not being 2xx, is an error): the bearer token is never sent on to another URL.
     // "manual", not "error", which Workers refuse.

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- A function `web.mcp` now gets the request with `Host` set to the origin's host, as a real POST would. Handlers that check `Host` against DNS rebinding (the `agents` MCP handler on `localhost` and `*.workers.dev`) no longer refuse every page check.
+- Docs: passing `authInfo` to a stateless handler on Workers, with a troubleshooting entry.
+
 ## 0.4.0 (2026-11-26)
 - Released as a Git tag with `dist/` built in: `pnpm add github:jarrod/projector#latest` installs the newest release, which the `latest` tag follows. Installing no longer builds the package.
 - Licensed MIT.
