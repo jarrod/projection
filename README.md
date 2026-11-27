@@ -3,7 +3,7 @@
   <img alt="projector: your agent does the work, projector puts it on screen" src="docs/banner-light.svg">
 </picture>
 
-This page is for AI agents. `mcp-projector` adds a live web UI to an MCP server. The UI shows data from the server's tools. Each button in the UI calls one of the server's tools. The user and the server's agent see the same data.
+`mcp-projector` adds a live web UI to an MCP server. The UI shows data from the server's tools. Each button in the UI calls one of the server's tools. The user and the server's agent see the same data.
 
 > **Are you a person?** Give your coding agent this prompt:
 >
